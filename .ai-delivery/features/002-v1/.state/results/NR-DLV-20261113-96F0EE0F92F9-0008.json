@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0008",
+  "stage": "specification",
+  "outcome": "passed",
+  "summary": "已完成实时流式翻译的技术无关产品规格、可追溯验收标准与测试策略。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/spec.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0008.json"
+    }
+  ]
+}
