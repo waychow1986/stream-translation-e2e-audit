@@ -9,7 +9,7 @@
 
 ## 问题报告
 
-Independent QA 的 IQA-001、IQA-002、IQA-003 均在等待首个 `data-testid="subtitle"` 元素可见时于 120000 ms 后超时，完整浏览器流程未完成。QA 将该现象报告为一个 test gap；三个场景具有相同的可观察失败和共同环境前置条件，因此作为 BUG-001 统一调查，但分类依据以调查证据为准。
+Independent QA 的 IQA-001、IQA-002、IQA-003 均在等待首个 `data-testid="subtitle"` 元素可见时于 120000 ms 后超时，完整浏览器流程未完成。QA 将该现象列为 test gap；三个场景具有相同的可观察失败和相同的浏览器启动前置条件，因此作为 BUG-001 统一调查，但最终分类以调查证据为准。
 
 ## 预期与实际行为
 
@@ -18,12 +18,14 @@ Independent QA 的 IQA-001、IQA-002、IQA-003 均在等待首个 `data-testid="
 
 ## 复现步骤与证据
 
-1. 使用 Independent QA 提供的公网环境 `http://74.159.182.40` 执行 Playwright 黑盒流程。
-2. 启动英语语音采集和翻译流程。
-3. 等待第一个 `getByTestId('subtitle')` 可见。
+1. Independent QA 使用公网环境 `http://74.159.182.40` 执行 Playwright 黑盒流程。
+2. 流程尝试启动英语语音采集和翻译。
+3. 流程等待第一个 `getByTestId('subtitle')` 可见。
 4. IQA-001 至 IQA-003 均得到相同结果：`locator.waitFor: Timeout 120000ms exceeded`。
 
-候选客户端在 `src/client/audio-capture.ts` 中通过 `navigator.mediaDevices.getUserMedia({ audio: true })` 采集音频；QA 环境地址明确使用公网 IP 的明文 HTTP。浏览器麦克风采集要求安全上下文，明文公网 HTTP 不满足该运行前置条件。QA 结果没有提供字幕、输入音频进度、依赖调用或其他成功证据。
+候选客户端在 `src/client/audio-capture.ts` 中通过 `navigator.mediaDevices.getUserMedia({ audio: true })` 采集音频；`playwright.config.ts` 的开发者流程也明确使用 fake media 参数、麦克风权限和已提交的合成 WAV。人工审批意见 HT-DLV-20261113-96F0EE0F92F9-0010 已确认：平台本轮仅提供 HTTP 公网地址，Independent QA 必须在 Chromium 启动时加入 `--unsafely-treat-insecure-origin-as-secure=<QA_BASE_URL>`，并同时使用 fake media 参数注入合成语音。该意见明确把安全上下文认定为测试工具启动条件，而非产品缺陷。
+
+本次 QA 结果仅记录等待字幕超时，`evidence` 为空，未提供浏览器控制台、WebSocket 收发消息、音频注入进度或实际 Azure 依赖调用证据，因而不能证明上述启动条件已满足，也不能把无字幕定位到产品链路。
 
 ## 影响追踪
 
@@ -34,24 +36,24 @@ Independent QA 的 IQA-001、IQA-002、IQA-003 均在等待首个 `data-testid="
 
 ## 根因分析
 
-已确认的阻塞根因位于 QA 部署环境：测试目标是明文公网 HTTP 地址，而完整流程的第一步依赖浏览器麦克风 API。该 API 在此地址不具备所需安全上下文，因而无法建立规格要求的浏览器语音采集前置条件；没有可证实的音频进入后续 Speech、Foundry 和字幕链路，最终表现为等待首条字幕超时。
+有证据支持的阻塞根因是 Independent QA 运行条件不完整：HTTP 公网地址上的 Chromium 需要显式把 `QA_BASE_URL` 视为安全来源，并需要 fake media 参数注入合成语音。人工审批已把这些条件认定为测试工具启动条件；QA 结果未提供任何证据证明这些条件已配置。缺少浏览器启动参数或场景前置配置按本阶段规则属于 `environment_failure`。
 
-现有证据不支持将超时归因于产品字幕实现。候选已有字幕 DOM 渲染路径，本地 Playwright 也声明通过 fake microphone 输入已提交 WAV；但这些本地 deterministic 证据同样不能证明真实 Azure 流程正常。
+直接可观察的超时发生在字幕等待处，但候选只有收到 `subtitle.delta` 或 `subtitle.final` 后才渲染 `data-testid="subtitle"`。在没有控制台、WebSocket 和依赖调用证据的情况下，无法证明合成音频已进入候选，也无法把失败进一步定位到 Speech、Foundry 或字幕渲染。现有证据不支持产品缺陷结论；本地 deterministic 测试同样不能替代真实 Azure 完整流程证据。
 
 ## 限定范围的修复方案
 
-不修改产品代码或测试。该问题不可进入 Coding Repair。平台应提供受信任的 HTTPS QA 环境并部署同一 Candidate，注入实际 Azure 依赖所需配置；Independent QA 应为 Playwright 配置麦克风权限及合成音频输入，再重新执行 IQA-001 至 IQA-003。重跑时应保留输入进度、浏览器错误、字幕变化及实际依赖调用的可关联证据。
+不修改产品代码或测试，该问题不可进入 Coding Repair。Independent QA 应在同一 Candidate 和现有 `http://74.159.182.40` 环境上，按人工审批意见为 Chromium 增加 `--unsafely-treat-insecure-origin-as-secure=<QA_BASE_URL>`，同时配置 fake media 参数、麦克风权限并注入合成英语 WAV，然后重新执行 IQA-001 至 IQA-003。场景失败时必须采集浏览器控制台和 WebSocket 收发消息，并关联输入进度、字幕变化及实际依赖调用证据。
 
 ## 回归风险
 
-环境纠正不会改变产品行为，产品回归风险低。主要验证风险是仅修正 HTTPS 但仍未提供麦克风权限、合成音频输入或实际 Azure 依赖配置，导致再次出现同样的无字幕超时；因此重跑前必须逐项确认场景前置条件。
+纠正 QA 启动条件不会改变产品行为，产品回归风险低。主要验证风险是仅增加安全来源参数，却未同时授予麦克风权限、启用 fake media 或注入合成 WAV，导致再次出现相同超时；另一个风险是未采集控制台和 WebSocket 证据，使后续真实产品或集成故障仍无法定位。
 
 ## 未解决证据
 
-本次 QA 未提供 Playwright trace、浏览器控制台错误、麦克风权限状态、输入音频进度、WebSocket 事件、服务端日志或 Azure 依赖调用记录。当前还缺少可执行浏览器语音采集的 HTTPS QA 环境及其场景前置配置；在运营方提供该云环境并重跑前，无法取得产品链路证据，也不能排除环境纠正后仍存在独立的产品或集成问题。
+本次 QA 未提供 Playwright trace、浏览器控制台错误、Chromium 启动参数、麦克风权限状态、输入音频进度、WebSocket 收发消息、服务端日志或 Azure 依赖调用记录。人工已经给出可在现有 HTTP 环境重跑的启动条件，因此不再缺少产品决定或额外输入；但在按该条件重跑并采集证据前，IQA-001 至 IQA-003 仍无有效验收结论，也不能排除修正运行条件后暴露独立的产品或集成问题。
 
 ## 分类与修复就绪决策
 
 - **classification：** `environment_failure`
 - **ready_for_fix：** `false`
-- **决策依据：** 当前失败由 QA 环境未满足浏览器语音采集的安全上下文前置条件导致，属于平台运行条件；需要运营方提供可执行完整流程的 HTTPS QA 云环境后重跑，不得通过产品代码或测试专用接口补偿。
+- **决策依据：** 当前证据仅支持 QA 浏览器启动参数和合成语音注入前置条件未得到证明，人工审批也明确认定其为测试工具运行条件。按规则该现象属于环境故障，须由 Independent QA 按指定参数重跑，不得通过产品代码或测试专用接口补偿。
