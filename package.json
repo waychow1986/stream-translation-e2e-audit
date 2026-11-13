@@ -1,0 +1,50 @@
+{
+  "name": "stream-translation-e2e-audit",
+  "version": "1.0.0",
+  "description": "AIDelivery Hub generated application: 企业实时翻译 E2E 审计",
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build && vite build --ssr ../server/index.ts --outDir ../../dist/server",
+    "start": "node dist/server/index.js",
+    "dev": "tsx src/server/index.ts",
+    "test:unit": "vitest run --root . tests/unit",
+    "test:contract": "vitest run --root . tests/contract",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:contract"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/waychow1986/stream-translation-e2e-audit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@azure/ai-projects": "^1.0.1",
+    "@azure/identity": "^4.14.1",
+    "@fastify/static": "^10.1.11",
+    "@fastify/websocket": "^11.3.7",
+    "@sinclair/typebox": "^0.34.52",
+    "fastify": "^5.12.8",
+    "microsoft-cognitiveservices-speech-sdk": "^1.53.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.2",
+    "@vitejs/plugin-react": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
