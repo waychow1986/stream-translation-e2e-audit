@@ -3,15 +3,26 @@
   "passed": false,
   "findings": [
     {
-      "id": "TASK-SELF-004",
+      "id": "TASK-SELF-005",
       "severity": "high",
       "scope": "self",
       "artifact": "tasks-implementation.md",
       "owner": "task-planning",
-      "summary": "真实麦克风测试缺少语音资产任务与准确路径",
-      "recommendation": "增加测试先行的资产准备任务，或修订现有测试资产任务，明确获准非敏感语音文件的准确仓库路径、与 manifest 中候选语言及内容标识的关联、被 Playwright Chromium 麦克风输入使用的方式，以及文件存在且清单引用有效的完成证据；不得写入会议正文或敏感语音。",
+      "summary": "React SPA 缺少可启动入口文件任务",
+      "recommendation": "在合适的 Setup 或实现任务中补充 Vite HTML 与浏览器启动入口的准确仓库路径、创建责任、依赖和可验证完成证据，并确保这些路径先于浏览器场景及容器构建可用。",
       "route": "current_stage",
       "reasonType": "coverage"
+    },
+    {
+      "id": "TASK-SELF-006",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "tasks-implementation.md",
+      "owner": "task-planning",
+      "summary": "T014 的完成证据依赖后续任务，依赖链不可执行",
+      "recommendation": "将 T014 的完成证据限定为其实际负责的候选集合与选择界面断言，或把需要 recognizer、发起控制的断言及通过证据移至相应后续实现任务；同步调整测试拆分和显式依赖，使每项任务可在其声明位置独立完成。",
+      "route": "current_stage",
+      "reasonType": "contradiction"
     }
   ]
 }
