@@ -63,3 +63,59 @@ Coding 沙箱无 Azure 或部署凭据，因此未执行真实 Speech continuous
 ### 实施结论
 
 本 Session 已完成并本地验证 `T001`—`T028` 的全部 Coding 产出，未发现需要输入或决定的阻塞项；结论为 `passed`。真实 Azure、部署与 Independent QA 结果明确延后，未在本报告中声称通过。
+
+## Coding Session NR-DLV-20261113-BCCA3652FB86-0022-b01
+
+### 实施范围
+
+本次为 `coding` 模式第 1 批续验。Session 起点的 `T001`—`T028` 已全部勾选且实现制品均存在，因此未重复实现或改写任务；本次按获批责任矩阵复核现有生产实现、开发者测试、容器和 Coding runtime，并补交当前 Session 的真实验证账本与结果文件。
+
+### 完成与受阻任务
+
+本次没有由 `[ ]` 改为 `[x]` 的任务，`progress.completedTaskIds` 为空；任务账本中也没有未勾选任务，`progress.blockedTaskIds` 为空。既有 `T001`—`T028` 的实现与声明制品经本次定向重验均通过，无需凭据、云环境或人工决定即可完成的遗留 Coding 工作。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `.ai-delivery/features/003-v1/reports/implementation.md` | 追加本 Session 的范围、验证结果、下游边界与结论 | Coding 结果契约 |
+| `.ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0022-b01.json` | 新增本次 `passed` 结果及空增量任务进度 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| FR-001—FR-011 / AC-001—AC-009 / IQA-001—IQA-006 | `src/client/`、`src/server/`、`src/shared/` | `tests/unit/`、`tests/contract/`、`tests/e2e/` | 16/16 developer、8/8 integration、4/4 本地 Playwright 辅助测试通过；真实 IQA 证据仍由下游产生 |
+| 平台 health、candidate identity、非 root 容器契约 | `Dockerfile`、`src/server/app.ts`、`src/server/config.ts` | `tests/contract/deployment.test.ts`、本地容器 smoke | 镜像构建成功，用户为 `10001`，`/healthz` 与 `/candidate-identity` 响应通过检查 |
+| Coding runtime 声明与部署后功能入口 | `.ai-delivery/features/003-v1/runtime/deployment.json`、`.ai-delivery/features/003-v1/runtime/developer-functional-run.sh` | JSON 定向检查、`bash -n` | 字段、命令分类、路径和脚本语法通过 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `npm ci --ignore-scripts` | Copilot 沙箱 | 通过 | 安装 199 个锁定 package，审计报告 0 个漏洞 |
+| `npm run staticAnalysis` | Copilot 沙箱 | 通过 | TypeScript 严格检查退出码 0 |
+| `npm run build` | Copilot 沙箱 | 通过 | Vite 7.3.8 生产构建成功并按脚本清理输出 |
+| `npm run developerTests` | Copilot 沙箱 | 通过 | 16/16 unit 与 contract 测试通过 |
+| `npm run integrationTests` | Copilot 沙箱 | 通过 | 8/8 contract integration 测试通过 |
+| `npm run functionalTests`（首次） | Copilot 沙箱 | 失败后已纠正环境 | 缺少 Playwright Chromium，4 项均未启动；不是实现失败 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npx playwright install chromium` 后执行 `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npm run functionalTests` | Copilot 沙箱 | 通过 | 锁定 Playwright build v1194 安装于仓库外临时目录，4/4 场景通过 |
+| `bash -n .ai-delivery/features/003-v1/runtime/developer-functional-run.sh` 与 `jq` runtime 检查 | Copilot 沙箱 | 通过 | 脚本语法及端口、路径、网络和五类验证命令有效 |
+| `npm audit --audit-level=moderate` | Copilot 沙箱 | 通过 | 0 个已知漏洞 |
+| `docker build -t stream-translation-candidate:session-0022 .` 及本地容器 smoke | Copilot 沙箱 Docker | 通过 | image user 为 `10001`；health、candidate identity 与 HTML 均通过 |
+
+### Runtime 与下游门禁就绪制品
+
+现有根目录 `Dockerfile`、`.ai-delivery/features/003-v1/runtime/deployment.json` 和 `developer-functional-run.sh` 均已复核。镜像以数字非 root UID `10001` 监听 8080；runtime 声明 `/healthz`、`/candidate-identity`、无 PostgreSQL和无私网，并提供五类非空验证命令；部署后脚本校验必需输入、候选身份和真实 Foundry 流式翻译结果。
+
+### 延后平台证据
+
+本 Session 未访问 Azure、AKS 或部署 URL，也未伪造其结果。真实 Speech continuous recognition、Workload Identity、Foundry 请求、公开候选身份以及 `IQA-001`—`IQA-006` 和 `NFR-002` 时限证据继续由 Candidate validation 与 Independent QA 在真实环境产生。
+
+### 剩余风险
+
+真实环境中的 Speech 英中 continuous language identification、中间结果节奏、Foundry 模型兼容性及 6 秒/5 秒/3 秒边界仍待下游验证。本地协议 adapter、Playwright 辅助测试和容器 smoke 不能替代这些真实集成证据。
+
+### 实施结论
+
+本次未发现未完成或受阻的 Coding 任务；现有全部任务制品通过必要本地重验，结论为 `passed`。本 Session 仅追加实施证据与结果文件，没有改写既有实现或任务状态。
