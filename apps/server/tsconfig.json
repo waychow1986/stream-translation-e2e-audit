@@ -6,5 +6,6 @@
     "tsBuildInfoFile": "../../node_modules/.cache/server.tsbuildinfo",
     "types": ["node"]
   },
-  "files": []
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts"]
 }
