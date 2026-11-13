@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0023",
+  "stage": "convergence",
+  "outcome": "repair",
+  "summary": "发现四项 HIGH 级 Coding 实现与验证证据缺陷，当前 Candidate 需要修复后再收敛。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/reports/convergence.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0023.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "CONV-001",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "英文 final 翻译完成前到达的下一片段会复用 segmentId 并推进 revision，导致上一 final 被拒绝且无法固定追加。",
+      "recommendation": "增加跨片段交错事件测试并修复片段生命周期，证明上一 final 可靠固定且下一片段以新 ID 追加。"
+    },
+    {
+      "id": "CONV-002",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "翻译超限或依赖失败只清除 current 而不终止会话，后续 recognition 会在原会话中自动再次翻译。",
+      "recommendation": "补充会话级失败测试并完整停止资源，阻止自动重试或重放，只允许用户操作建立新会话。"
+    },
+    {
+      "id": "CONV-003",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "英文调度器未实现获批的稳定短语判定，会立即提交任意单词碎片或重复 interim。",
+      "recommendation": "按 TD-005 补充完整 token、重复值和持续变化测试并实现稳定快照判定，同时保持实时性预算。"
+    },
+    {
+      "id": "CONV-004",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "本地 Playwright 通过生产测试分支直接注入 reducer，绕过生产会话与协议适配器，实施报告中的草稿修订和时限辅助证据不成立。",
+      "recommendation": "使用协议级 fake adapter 驱动生产边界，补齐任务明确的会话、修订、连续更新、时限、清理和恢复断言并重跑最小验证集。"
+    }
+  ]
+}
