@@ -1,0 +1,11 @@
+.git
+.github
+.ai-delivery
+node_modules
+dist
+coverage
+playwright-report
+test-results
+tests
+.env
+.env.*
