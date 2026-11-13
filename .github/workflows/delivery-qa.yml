@@ -96,11 +96,17 @@ jobs:
           test -f "$qa_script"
           git merge-base --is-ancestor "$CANDIDATE_SHA" HEAD
           actual_hash="sha256:$(sha256sum "$qa_plan" | cut -d' ' -f1)"
-          test "$actual_hash" = "$QA_PLAN_HASH"
+          if [[ "$actual_hash" != "$QA_PLAN_HASH" ]]; then
+            echo "QA plan hash $actual_hash does not match the locked plan $QA_PLAN_HASH." >&2
+            exit 1
+          fi
+          # The QA branch may only add the locked plan, the QA script and the platform result files
+          # of its agent sessions.
           unexpected="$(
             git diff --name-only "$CANDIDATE_SHA..HEAD" |
               grep -Fvx "$qa_plan" |
-              grep -Fvx "$qa_script" || true
+              grep -Fvx "$qa_script" |
+              grep -Ev "^${ARTIFACT_ROOT//./\.}/\.state/results/[^/]+\.json$" || true
           )"
           if [[ -n "$unexpected" ]]; then
             echo "QA branch contains changes outside the locked QA artifacts:" >&2
