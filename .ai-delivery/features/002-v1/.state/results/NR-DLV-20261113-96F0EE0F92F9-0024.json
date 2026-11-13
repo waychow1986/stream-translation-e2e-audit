@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0024",
+  "stage": "technical-solution.gate",
+  "outcome": "repair",
+  "summary": "技术方案的机器可读实施路径仍未覆盖其必需的部署与 Independent QA 制品，需修复后方可进入任务规划。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0024.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "TS-PATH-003",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "“Component 边界与项目结构”的机器可读根路径清单仅授权根配置文件、src/ 与 tests/，却未包含方案在部署和验证章节要求实现的 .ai-delivery/features/002-v1/runtime/deployment.json 与 .ai-delivery/features/002-v1/runtime/qa-run.sh，导致必需实施制品不在 Coding 获准路径内，上一轮同根因未被实际消除。",
+      "recommendation": "在根路径清单中加入 `.ai-delivery/features/002-v1/runtime/`，并统一 deployment.json 与 qa-run.sh 的所有引用，使后续任务能够在获准路径内实现部署声明和 Independent QA 脚本。",
+      "resolvesPrevious": "TS-PATH-003"
+    }
+  ]
+}
