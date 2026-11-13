@@ -2,14 +2,42 @@
   "passed": false,
   "testedCommitSha": "36ddbb8ba84d84f3958cf7af846c5ab9c24059e7",
   "environmentUrl": "http://74.159.182.40",
-  "summary": "Independent QA 因执行环境未就绪而未开始功能验收。",
-  "qaPlanCommitSha": "4ef5b25923741fda51a8cdfd6ac2f87eccec6ef9",
-  "qaPlanHash": "sha256:e55146ccfac5a0fbb0c9e2003f1928ae1f325625d8bb7a8f454aa38693b0960a",
+  "summary": "Independent QA 无法完成已批准的浏览器完整流程。",
+  "qaPlanCommitSha": "656d2b79ee7813e8335c1789767b431ad4899d68",
+  "qaPlanHash": "sha256:b4c0c297b92fde0e3d9d5295a7b8d5e72367d1802f88277c2d7c58f44bcf9965",
   "defects": [],
-  "testGaps": [],
-  "evidence": [
-    "测试素材生成前置失败：Azure Speech TTS 未生成合成 WAV。curl: (22) The requested URL returned error: 404 "
+  "testGaps": [
+    "IQA-001 至 IQA-003 的 Playwright 黑盒流程未完成：locator.waitFor: Timeout 120000ms exceeded.\nCall log:\n  - waiting for getByTestId('subtitle').first() to be visible\n"
   ],
+  "evidence": [],
   "bugfixResults": [],
-  "scenarios": []
+  "scenarios": [
+    {
+      "id": "IQA-001",
+      "passed": false,
+      "externalServices": [
+        "Azure AI Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "浏览器流程中断：locator.waitFor: Timeout 120000ms exceeded.\nCall log:\n  - waiting for getByTestId('subtitle').first() to be visible\n"
+    },
+    {
+      "id": "IQA-002",
+      "passed": false,
+      "externalServices": [
+        "Azure AI Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "浏览器流程中断：locator.waitFor: Timeout 120000ms exceeded.\nCall log:\n  - waiting for getByTestId('subtitle').first() to be visible\n"
+    },
+    {
+      "id": "IQA-003",
+      "passed": false,
+      "externalServices": [
+        "Azure AI Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "浏览器流程中断：locator.waitFor: Timeout 120000ms exceeded.\nCall log:\n  - waiting for getByTestId('subtitle').first() to be visible\n"
+    }
+  ]
 }
