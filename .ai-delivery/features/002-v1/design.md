@@ -63,11 +63,12 @@ Coding 获准创建或修改的仓库根路径如下：
 - `./.gitignore`
 - `src/`
 - `tests/`
-- `runtime/`
+- `runtime/deployment.json`（仅在本清单中按 active Feature 目录相对路径解析）
+- `runtime/qa-run.sh`（仅在本清单中按 active Feature 目录相对路径解析）
 
-`src/client/` 包含 React 页面、AudioWorklet、WebSocket client、字幕 reducer 与样式；`src/server/` 包含 Fastify 启动、健康/身份路由、WebSocket session、Speech/Foundry adapters 与配置校验；`src/shared/` 包含协议 schema 和共享类型。`tests/unit/` 验证状态机与排序，`tests/contract/` 验证 adapters 和协议，`tests/e2e/` 放置本地 Playwright 场景，`tests/fixtures/audio/iqa-en-multisegment.wav` 保存可重复的合成英语音频，`tests/fixtures/audio/iqa-en-multisegment.json` 保存片段时间、英文原意及可自动判定的中文概念词组。根 `runtime/` 仅用于不含平台路径的运行制品源文件：`runtime/deployment.json` 和 `runtime/qa-run.sh`；Coding 将二者逐字投影到 Hub 要求的 active Feature runtime 位置，投影由平台阶段处理，避免把 `.ai-delivery/` 平台路径授权为 Coding 根路径。
+`src/client/` 包含 React 页面、AudioWorklet、WebSocket client、字幕 reducer 与样式；`src/server/` 包含 Fastify 启动、健康/身份路由、WebSocket session、Speech/Foundry adapters 与配置校验；`src/shared/` 包含协议 schema 和共享类型。`tests/unit/` 验证状态机与排序，`tests/contract/` 验证 adapters 和协议，`tests/e2e/` 放置本地 Playwright 场景，`tests/fixtures/audio/iqa-en-multisegment.wav` 保存可重复的合成英语音频，`tests/fixtures/audio/iqa-en-multisegment.json` 保存片段时间、英文原意及可自动判定的中文概念词组。清单中的两个 `runtime/` 文件不是仓库根目录文件，而是相对于本次提示指定的 active Feature 目录解析的精确实施路径；这是本清单对 Hub runtime 交付制品的唯一特例，不授权修改该 Feature 下的其他文件或任何其他平台路径。
 
-构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。平台最终读取的 Feature runtime 交付位置为 `.ai-delivery/features/002-v1/runtime/deployment.json` 与 `.ai-delivery/features/002-v1/runtime/qa-run.sh`；它们与上述 `runtime/` 源文件内容必须一致，所需音频和语义清单固定来自上述 `tests/fixtures/audio/` 路径。
+构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。平台最终读取的两个 Feature runtime 文件即上述 active Feature-relative 清单项，所需音频和语义清单固定来自上述 `tests/fixtures/audio/` 路径。
 
 ## 数据流、状态、并发与生命周期
 
@@ -105,7 +106,7 @@ WebSocket `GET /ws/translation` 使用 JSON control/event 与 binary audio frame
 
 ## 安全、隐私、身份与 Secret
 
-服务端使用带 `AZURE_CLIENT_ID` 的 `DefaultAzureCredential`；AKS 中解析为 Workload Identity。Speech 令牌 scope 固定为 `https://cognitiveservices.azure.com/.default`，初次创建 recognizer 前取得令牌；每次取得令牌后按 `expiresOnTimestamp` 安排在到期前刷新，刷新成功时同时更新保存的 `SpeechConfig.authorizationToken` 与活动 `SpeechRecognizer.authorizationToken`，保证长会话不沿用过期值。若到期前刷新失败，则终止会话为 `SPEECH_UNAVAILABLE`，不改用 key。Foundry 使用 Azure Identity client 的内建令牌刷新。禁止 API key、连接字符串、浏览器 token、`.env` secret 和测试凭据。客户端只能访问同源应用，WebSocket 校验 `Origin` 与当前 Host；CSP 至少限制 `default-src 'self'`、`connect-src 'self'`、`media-src 'self' blob:`，并禁止 frame 嵌入与对象资源。
+服务端使用带 `AZURE_CLIENT_ID` 的 `DefaultAzureCredential`；AKS 中解析为 Workload Identity。Speech 令牌 scope 固定为 `https://cognitiveservices.azure.com/.default`，初次创建 recognizer 前取得令牌；每次取得令牌后在 `expiresOnTimestamp` 前 5 分钟刷新，若本次剩余有效期不足 10 分钟则在剩余有效期中点刷新。刷新成功时同时更新保存的 `SpeechConfig.authorizationToken` 与活动 `SpeechRecognizer.authorizationToken`，保证长会话不沿用过期值。若到期前刷新失败，则终止会话为 `SPEECH_UNAVAILABLE`，不改用 key。Foundry 使用 Azure Identity client 的内建令牌刷新。禁止 API key、连接字符串、浏览器 token、`.env` secret 和测试凭据。客户端只能访问同源应用，WebSocket 校验 `Origin` 与当前 Host；CSP 至少限制 `default-src 'self'`、`connect-src 'self'`、`media-src 'self' blob:`，并禁止 frame 嵌入与对象资源。
 
 麦克风仅在用户启动后申请，停止、失败、断连和页面卸载均停止所有 MediaStreamTrack。服务端不持久化音频、转写或字幕；结构化日志对消息正文、音频、authorization header、token 和 Azure response body 一律禁记。容器以数字 UID `10001` 运行，不提权，不依赖可写应用目录；临时运行数据只保存在内存。
 
