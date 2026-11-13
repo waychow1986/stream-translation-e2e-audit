@@ -19,9 +19,9 @@
 
 ## Phase 1：Setup
 
-- [ ] T001 建立 Node.js 22 LTS npm workspaces、锁文件、共享 TypeScript 配置及 web/server/contracts 包清单，固定 React、Vite、Fastify、Speech SDK、Vitest 与 Playwright 依赖（`package.json`、`package-lock.json`、`tsconfig.base.json`、`apps/web/package.json`、`apps/server/package.json`、`packages/contracts/package.json`；来源：TD-001、TD-011；依赖：无；证据：`npm ci` 可由锁文件在 clean runner 重建依赖）
-- [ ] T002 [P] 配置仅忽略已批准的依赖、构建、覆盖率、测试报告和本地 secret 文件，并从容器上下文排除 Git 元数据、测试报告及 Delivery 制品（`.gitignore`、`.dockerignore`；来源：design.md“Component 边界与项目结构”、TD-009、TD-010；依赖：T001；证据：忽略规则覆盖 `node_modules/`、`dist/`、`coverage/`、`playwright-report/`、`test-results/`、`.env*` 且不吞掉生产源码）
-- [ ] T003 [P] 建立 Vite、Vitest、TypeScript 与 Playwright 的可复现配置，并创建 Vite HTML、浏览器启动入口和最小 React 应用壳；Playwright 使用真实 Chromium 麦克风输入且不内置 provider stub（`apps/web/index.html`、`apps/web/src/main.tsx`、`apps/web/src/App.tsx`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`apps/web/vitest.config.ts`、`apps/server/tsconfig.json`、`apps/server/vitest.config.ts`、`packages/contracts/tsconfig.json`、`playwright.config.ts`；来源：TD-001、TD-011、design.md“Architecture”“Component 边界与项目结构”“验证环境责任矩阵”；依赖：T001；证据：Vite development server 可从 `apps/web/index.html` 加载 `apps/web/src/main.tsx` 并渲染应用壳且无缺失入口模块，测试发现命令可列出 unit、contract、integration、functional 与 E2E 项目）
+- [x] T001 建立 Node.js 22 LTS npm workspaces、锁文件、共享 TypeScript 配置及 web/server/contracts 包清单，固定 React、Vite、Fastify、Speech SDK、Vitest 与 Playwright 依赖（`package.json`、`package-lock.json`、`tsconfig.base.json`、`apps/web/package.json`、`apps/server/package.json`、`packages/contracts/package.json`；来源：TD-001、TD-011；依赖：无；证据：`npm ci` 可由锁文件在 clean runner 重建依赖）
+- [x] T002 [P] 配置仅忽略已批准的依赖、构建、覆盖率、测试报告和本地 secret 文件，并从容器上下文排除 Git 元数据、测试报告及 Delivery 制品（`.gitignore`、`.dockerignore`；来源：design.md“Component 边界与项目结构”、TD-009、TD-010；依赖：T001；证据：忽略规则覆盖 `node_modules/`、`dist/`、`coverage/`、`playwright-report/`、`test-results/`、`.env*` 且不吞掉生产源码）
+- [x] T003 [P] 建立 Vite、Vitest、TypeScript 与 Playwright 的可复现配置，并创建 Vite HTML、浏览器启动入口和最小 React 应用壳；Playwright 使用真实 Chromium 麦克风输入且不内置 provider stub（`apps/web/index.html`、`apps/web/src/main.tsx`、`apps/web/src/App.tsx`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`apps/web/vitest.config.ts`、`apps/server/tsconfig.json`、`apps/server/vitest.config.ts`、`packages/contracts/tsconfig.json`、`playwright.config.ts`；来源：TD-001、TD-011、design.md“Architecture”“Component 边界与项目结构”“验证环境责任矩阵”；依赖：T001；证据：Vite development server 可从 `apps/web/index.html` 加载 `apps/web/src/main.tsx` 并渲染应用壳且无缺失入口模块，测试发现命令可列出 unit、contract、integration、functional 与 E2E 项目）
 
 ## Phase 2：Foundational
 
