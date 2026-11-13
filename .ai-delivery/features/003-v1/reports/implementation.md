@@ -119,3 +119,63 @@ Coding 沙箱无 Azure 或部署凭据，因此未执行真实 Speech continuous
 ### 实施结论
 
 本次未发现未完成或受阻的 Coding 任务；现有全部任务制品通过必要本地重验，结论为 `passed`。本 Session 仅追加实施证据与结果文件，没有改写既有实现或任务状态。
+
+## Coding Session NR-DLV-20261113-BCCA3652FB86-0024-b01
+
+### 实施范围
+
+本次为 `coding-repair` 模式，定向修复 Convergence 的 `CONV-001`—`CONV-004`：英文 final 与下一片段交错、超限及翻译依赖失败后的会话终止、`TD-005` 稳定短语调度，以及绕过生产会话边界的 Playwright 测试。未改变已批准产品行为、技术决定、任务文本或 runtime 契约。
+
+### 完成与受阻任务
+
+`T008`、`T009`、`T014`、`T015`、`T017`—`T019`、`T021`、`T023`—`T024` 对应缺陷均已修复并重验。任务在 Session 起点已全部勾选，本次没有由 `[ ]` 改为 `[x]` 的任务，因此 `progress.completedTaskIds` 为空；没有未勾选任务或受阻项，`progress.blockedTaskIds` 为空。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `src/client/session-controller.ts`、`src/client/App.tsx` | 串行处理 recognition；捕获片段代次；超限、NDJSON error 与 fetch 失败时终止全部会话资源；仅新用户操作创建新会话；增加 pagehide 清理和协议 adapter 注入边界 | T008、T009、T014、T019 |
+| `src/client/translation-scheduler.ts` | 抑制重复 interim 和单词碎片，以完整 token 的 400 ms 稳定快照或持续变化 2 秒最新快照触发翻译 | T014、T017 |
+| `src/client/speech-adapter.ts` | 提取可注入 SDK facade，保持生产 SDK 路径并允许确定性验证 recognition 分派、token 原位刷新和资源清理 | T008、T011 |
+| `tests/unit/session-lifecycle.test.ts`、`tests/unit/translation-scheduler.test.ts`、`tests/unit/speech-adapter.test.ts` | 新增跨片段交错、超限、NDJSON/fetch 失败、手动恢复、稳定 token、重复值、2 秒边界及 Speech 生命周期回归测试 | T008、T014、T017—T019、T023 |
+| `tests/e2e/support/fake-driver.ts`、`tests/e2e/streaming-session.spec.ts`、`tests/e2e/english-captions.spec.ts`、`tests/e2e/chinese-captions.spec.ts` | 用协议级 fake Speech adapter、真实 `SessionController`、调度器和 NDJSON client 替换 reducer 直注入，覆盖草稿修订、final 固定、跨片段追加、失败恢复、刷新、停止、卸载和中文绕过翻译 | T009、T015、T021、T024 |
+| `.ai-delivery/features/003-v1/reports/implementation.md`、`.ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0024-b01.json` | 追加本次修复证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| CONV-001 / FR-006、FR-009 / AC-003、AC-006 | `src/client/session-controller.ts` | `tests/unit/session-lifecycle.test.ts`、`tests/e2e/english-captions.spec.ts` | 上一 final 固定后，交错到达的下一片段以新 ID 追加 |
+| CONV-002 / design 恢复边界 | `src/client/session-controller.ts`、`src/client/App.tsx` | `tests/unit/session-lifecycle.test.ts`、`tests/e2e/english-captions.spec.ts` | 三类失败均终止旧会话并保留 fixed，后续 recognition 不重放，用户重新开始后恢复 |
+| CONV-003 / FR-004 / TD-004—TD-005 | `src/client/translation-scheduler.ts` | `tests/unit/translation-scheduler.test.ts` | 单词碎片和重复值不提交，完整 token 在 400 ms 提交，持续变化在 2 秒提交最新快照 |
+| CONV-004 / AC-001—AC-009 | `src/client/App.tsx`、`src/client/session-controller.ts`、`src/client/translation-client.ts` | `tests/e2e/`、`tests/unit/speech-adapter.test.ts` | 7/7 Playwright 场景经生产会话与 NDJSON 边界通过；未再直接调用 reducer |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `node --test --experimental-strip-types tests/unit/translation-scheduler.test.ts tests/unit/session-lifecycle.test.ts`（修复前） | Copilot 沙箱 | 预期失败 | 旧调度器立即提交 `hel` 等碎片；当时依赖尚未安装，生命周期文件同时报告 SDK package 缺失 |
+| `npm ci --ignore-scripts` | Copilot 沙箱 | 通过 | 从锁文件安装 199 个 package，0 个漏洞；安装目录作为 Session 临时产物排除于最终 diff |
+| `npm run staticAnalysis` | Copilot 沙箱 | 通过 | TypeScript 严格检查退出码 0 |
+| `npm run build` | Copilot 沙箱 | 通过 | Vite 7.3.8 生产构建成功并按脚本清理输出 |
+| `npm run developerTests` | Copilot 沙箱 | 通过 | 22/22 unit 与 contract 测试通过 |
+| `npm run integrationTests` | Copilot 沙箱 | 通过 | 8/8 contract integration 测试通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npm run functionalTests` | Copilot 沙箱 | 通过 | 7/7 协议级本地 Playwright 辅助场景通过 |
+| `npm audit --audit-level=moderate` | Copilot 沙箱 | 通过 | 0 个已知漏洞 |
+| `bash -n .ai-delivery/features/003-v1/runtime/developer-functional-run.sh` 与 `jq` runtime 定向检查 | Copilot 沙箱 | 通过 | 脚本语法、端口、路径、网络与五类命令声明有效 |
+
+### Runtime 与下游门禁就绪制品
+
+根目录 `Dockerfile`、`runtime/deployment.json` 和 `runtime/developer-functional-run.sh` 无需修改且保持就绪。生产构建继续监听 8080，health 与 candidate identity 路径不变；Candidate checks 将按声明顺序重跑五类命令，部署后脚本仍只对真实 Foundry 翻译和候选身份形成证据。
+
+### 延后平台证据
+
+本 Session 未访问 Azure、AKS 或部署 URL。真实 Speech continuous recognition、Workload Identity、Foundry 模型、公开候选环境以及 `IQA-001`—`IQA-006` 和 `NFR-002` 黑盒 6 秒/5 秒/3 秒结果继续由 Candidate validation 与 Independent QA 产生；本地协议 fake 结果不替代这些证据。
+
+### 剩余风险
+
+协议级测试证明生产客户端会话、调度、NDJSON 和 UI 状态边界，但真实 Speech interim 节奏及 Foundry 首 token 延迟仍可能影响部署环境时限。跨片段方案会在上一 final 流完成前排队后续 recognition，以保证固定顺序；其真实环境延迟影响须由 `IQA-002` 与 `IQA-005` 观测。
+
+### 实施结论
+
+`CONV-001`—`CONV-004` 已在批准路径内完成定向修复，全部必做本地验证通过，无待输入、待决定或受阻任务；本次结果为 `passed`。下游真实环境证据未在本报告中提前声称通过。
