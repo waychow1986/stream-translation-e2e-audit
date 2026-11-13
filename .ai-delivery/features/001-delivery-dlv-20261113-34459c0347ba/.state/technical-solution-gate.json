@@ -1,0 +1,28 @@
+{
+  "stage": "technical-solution",
+  "passed": false,
+  "findings": [
+    {
+      "id": "TS-SELF-001",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "design.md",
+      "owner": "technical-solution",
+      "summary": "单会话完整自动检测语言集合的可行性尚未闭合",
+      "recommendation": "在 Technical Solution 中完成目标 SDK、订阅和区域下单次 continuous language identification 对完整权威语言集合的可行性闭合，并据结果确定可实施方案；若所有批准候选架构均无法满足 AC-002，则以具体不可实现证据触发 Specification 上游例外。",
+      "route": "current_stage",
+      "reasonType": "incomplete"
+    },
+    {
+      "id": "TS-SELF-002",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "design.md",
+      "owner": "technical-solution",
+      "summary": "指定模型的流式且关闭 reasoning 能力尚未闭合",
+      "recommendation": "在 Technical Solution 中闭合目标 gpt-sol-6.1 deployment 对所选 API、流式输出及关闭 reasoning 参数的兼容性，并据确认结果固定可执行契约；若批准 deployment 无法满足基线约束，则按治理路径处理冲突，不得由 Coding 自行换模或降级。",
+      "route": "current_stage",
+      "reasonType": "incomplete"
+    }
+  ]
+}
