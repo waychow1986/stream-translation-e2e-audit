@@ -21,7 +21,7 @@
 
 - [ ] T001 建立 Node.js 22 LTS npm workspaces、锁文件、共享 TypeScript 配置及 web/server/contracts 包清单，固定 React、Vite、Fastify、Speech SDK、Vitest 与 Playwright 依赖（`package.json`、`package-lock.json`、`tsconfig.base.json`、`apps/web/package.json`、`apps/server/package.json`、`packages/contracts/package.json`；来源：TD-001、TD-011；依赖：无；证据：`npm ci` 可由锁文件在 clean runner 重建依赖）
 - [ ] T002 [P] 配置仅忽略已批准的依赖、构建、覆盖率、测试报告和本地 secret 文件，并从容器上下文排除 Git 元数据、测试报告及 Delivery 制品（`.gitignore`、`.dockerignore`；来源：design.md“Component 边界与项目结构”、TD-009、TD-010；依赖：T001；证据：忽略规则覆盖 `node_modules/`、`dist/`、`coverage/`、`playwright-report/`、`test-results/`、`.env*` 且不吞掉生产源码）
-- [ ] T003 [P] 建立 Vite、Vitest、TypeScript 与 Playwright 的可复现配置，Playwright 使用真实 Chromium 麦克风输入且不内置 provider stub（`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`apps/web/vitest.config.ts`、`apps/server/tsconfig.json`、`apps/server/vitest.config.ts`、`packages/contracts/tsconfig.json`、`playwright.config.ts`；来源：TD-001、TD-011、design.md“验证环境责任矩阵”；依赖：T001；证据：测试发现命令可列出 unit、contract、integration、functional 与 E2E 项目）
+- [ ] T003 [P] 建立 Vite、Vitest、TypeScript 与 Playwright 的可复现配置，并创建 Vite HTML、浏览器启动入口和最小 React 应用壳；Playwright 使用真实 Chromium 麦克风输入且不内置 provider stub（`apps/web/index.html`、`apps/web/src/main.tsx`、`apps/web/src/App.tsx`、`apps/web/vite.config.ts`、`apps/web/tsconfig.json`、`apps/web/vitest.config.ts`、`apps/server/tsconfig.json`、`apps/server/vitest.config.ts`、`packages/contracts/tsconfig.json`、`playwright.config.ts`；来源：TD-001、TD-011、design.md“Architecture”“Component 边界与项目结构”“验证环境责任矩阵”；依赖：T001；证据：Vite development server 可从 `apps/web/index.html` 加载 `apps/web/src/main.tsx` 并渲染应用壳且无缺失入口模块，测试发现命令可列出 unit、contract、integration、functional 与 E2E 项目）
 
 ## Phase 2：Foundational
 
@@ -35,16 +35,16 @@
 ### 测试
 
 - [ ] T008 [P] [US2] 为语言目录、1～10 个去重 BCP 47 tag、目录外 tag 拒绝及 Speech 短期 token 响应编写 API contract test，并断言语言目录与 token 的成功响应均禁止缓存（`apps/server/src/routes/speech.contract.test.ts`、`packages/contracts/src/speech.contract.test.ts`；来源：US-002、FR-002、FR-003、GET `/api/source-languages`、POST `/api/speech/token`；依赖：T007；证据：覆盖 1、10、0、11、重复、不支持 tag、STS 失败，且两个成功响应的 `Cache-Control: no-store` 断言均通过）
-- [ ] T009 [P] [US2] 为候选集合校验、运行中不可修改、finalized result 候选内检测及缺失/越界检测中断编写 focused unit test（`apps/web/src/speech/candidate-languages.test.ts`、`apps/web/src/speech/recognizer.test.ts`；来源：FR-002、FR-003、AC-002、AC-003、TD-003；依赖：T007；证据：单元测试证明 tag 不被默认、截断或静默替换）
+- [ ] T009 [P] [US2] 为候选集合校验与运行中不可修改编写 candidate focused unit test，并为 finalized result 候选内检测及缺失/越界检测中断编写 recognizer focused unit test（`apps/web/src/speech/candidate-languages.test.ts`、`apps/web/src/speech/recognizer.test.ts`；来源：FR-002、FR-003、AC-002、AC-003、TD-003；依赖：T007；证据：两个定向测试文件分别证明候选集合不被默认、截断或静默替换，以及 recognizer 仅接受候选内非空 finalized result）
 - [ ] T010 [P] [US2] 准备获准且不含会议正文或敏感语音的测试短句音频与 manifest，并编写真实 Azure Speech integration 场景，验证 1 种与 10 种候选配置、范围内各语言 continuous LID、token 获取/刷新失败和检测越界中断；manifest 的每个条目必须把对应文件路径、候选语言 BCP 47 tag 与非正文 `contentId` 关联，场景按条目为每种候选语言单独启动 Chromium，并通过 `--use-file-for-fake-audio-capture=<对应文件路径>` 将该文件作为浏览器麦克风输入（`tests/e2e/integration/speech-lid.spec.ts`、`tests/e2e/assets/approved-speech-manifest.json`、`tests/e2e/assets/speech/candidate-01.wav`、`tests/e2e/assets/speech/candidate-02.wav`、`tests/e2e/assets/speech/candidate-03.wav`、`tests/e2e/assets/speech/candidate-04.wav`、`tests/e2e/assets/speech/candidate-05.wav`、`tests/e2e/assets/speech/candidate-06.wav`、`tests/e2e/assets/speech/candidate-07.wav`、`tests/e2e/assets/speech/candidate-08.wav`、`tests/e2e/assets/speech/candidate-09.wav`、`tests/e2e/assets/speech/candidate-10.wav`；来源：IQA-002、IQA-003、AC-002、AC-003、TD-011、design.md“验证环境责任矩阵”“快速验证指南”；依赖：T007；证据：十个语音文件均存在且为可被 Chromium 读取的获准非敏感音频，manifest 中每个文件引用均可解析到仓库内对应文件并具有候选 tag 与 `contentId`，场景实际使用所引用文件取得对应检测 tag 和 candidate 标识）
-- [ ] T011 [P] [US2] 编写浏览器 functional 场景，验证语言目录展示、选择修正、空范围/超过十种/不支持语言不能发起以及有效范围可发起（`tests/e2e/functional/candidate-language-selection.spec.ts`；来源：IQA-002、FR-002、AC-002；依赖：T007；证据：断言用户操作、可观察校验状态和未请求麦克风/recognizer 的边界）
+- [ ] T011 [P] [US2] 编写候选选择界面的浏览器 functional 场景，验证语言目录展示、无默认语言、一种与十种候选选择，以及空范围、超过十种或目录外 tag 的可观察校验和修正（`tests/e2e/functional/candidate-language-selection.spec.ts`；来源：IQA-002、FR-002、AC-002；依赖：T007；证据：断言候选集合与选择界面的用户操作、校验状态和修正结果，不要求 recognizer 或发起控制已实现）
 - [ ] T012 [P] [US2] 编写完整 Playwright E2E 场景，验证多候选语言无需逐段指定即可被真实检测并进入中文字幕流程（`tests/e2e/journeys/automatic-language-detection.spec.ts`；来源：IQA-003、FR-003、FR-004、AC-003；依赖：T007；证据：关联真实语音、候选范围、检测结果和页面中文字幕，且不是页面 smoke）
 
 ### 实现
 
 - [ ] T013 [US2] 实现配置驱动且启动时校验的权威语言目录、Speech STS 短期 token endpoint 和对应共享 schema，为语言目录与 token 的成功响应设置 `Cache-Control: no-store`，且不缓存或记录 token（`packages/contracts/src/speech.ts`、`apps/server/src/adapters/speech-token.ts`、`apps/server/src/routes/speech.ts`；来源：FR-002、GET `/api/source-languages`、POST `/api/speech/token`、TD-003、TD-004；依赖：T008～T012；证据：T008 全部通过，包括两个成功响应的禁止缓存断言，且目录无效使 readiness 503）
-- [ ] T014 [US2] 实现候选语言加载、去重选择、1～10 边界校验和修正界面，运行中锁定选择且不添加默认语言（`apps/web/src/components/LanguageSelector.tsx`、`apps/web/src/speech/candidate-languages.ts`；来源：US-002、FR-002、SC-002、AC-002；依赖：T013；证据：T009、T011 通过）
-- [ ] T015 [US2] 实现浏览器 Speech SDK continuous recognition/continuous LID adapter，将所选 tag 原样配置给单个 recognizer，只提交候选内非空 finalized segment，并把 token、采集及检测失败映射为中断（`apps/web/src/speech/recognizer.ts`、`apps/web/src/speech/types.ts`；来源：FR-001、FR-003、AC-003、TD-002、TD-003；依赖：T014；证据：T009 通过，并具备执行 T010、T012 的真实环境命令）
+- [ ] T014 [US2] 实现候选语言加载、去重选择、1～10 边界校验和修正界面，将选择界面接入应用壳，运行中锁定选择且不添加默认语言（`apps/web/src/components/LanguageSelector.tsx`、`apps/web/src/speech/candidate-languages.ts`、`apps/web/src/App.tsx`；来源：US-002、FR-002、SC-002、AC-002；依赖：T013；证据：`apps/web/src/speech/candidate-languages.test.ts` 和 T011 通过，仅证明候选集合与选择界面责任）
+- [ ] T015 [US2] 实现浏览器 Speech SDK continuous recognition/continuous LID adapter，将所选 tag 原样配置给单个 recognizer，只提交候选内非空 finalized segment，并把 token、采集及检测失败映射为中断（`apps/web/src/speech/recognizer.ts`、`apps/web/src/speech/types.ts`；来源：FR-001、FR-003、AC-003、TD-002、TD-003；依赖：T014；证据：`apps/web/src/speech/recognizer.test.ts` 通过，并具备执行 T010、T012 的真实环境命令）
 
 ## Phase 4：US3 - 控制实时字幕流程边界
 
@@ -53,7 +53,7 @@
 - [ ] T016 [P] [US3] 为 run state、generation、允许转换及稳定 interruption stage 编写共享 contract test（`packages/contracts/src/run.contract.test.ts`；来源：US-003、FR-005～FR-008、design.md“状态转换”；依赖：T015；证据：覆盖 `idle|starting|running|interrupted|stopping|stopped` 及非法转换拒绝）
 - [ ] T017 [P] [US3] 为发起、运行中停止、中断后停止、重复停止、共享终止 promise、清理失败、晚到 callback、FIFO 清空和重新发起编写 focused unit test（`apps/web/src/run/run-controller.test.ts`；来源：FR-005～FR-008、AC-005～AC-008、TD-008；依赖：T015；证据：证明停止意图优先、幂等释放及旧 generation 不能回写）
 - [ ] T018 [P] [US3] 编写浏览器与真实 Speech 生命周期 integration 场景，验证 recognizer/microphone/fetch 的发起、abort、close、token 失败中断和新 generation 重建（`tests/e2e/integration/run-lifecycle.spec.ts`；来源：FR-005～FR-008、TD-008、design.md“验证环境责任矩阵”；依赖：T015；证据：记录不含正文的状态、generation、资源关闭与后续新会话关联）
-- [ ] T019 [P] [US3] 编写手动发起、运行中停止、中断时停止、重复停止及重新发起的浏览器 functional 场景（`tests/e2e/functional/run-controls.spec.ts`；来源：IQA-005、IQA-006、IQA-008、AC-005、AC-006、AC-008；依赖：T015；证据：断言停止后无新增采集/字幕、中断提示被已停止替换且允许再次发起）
+- [ ] T019 [P] [US3] 编写候选范围发起边界、手动发起、运行中停止、中断时停止、重复停止及重新发起的浏览器 functional 场景（`tests/e2e/functional/run-controls.spec.ts`；来源：IQA-002、IQA-005、IQA-006、IQA-008、AC-002、AC-005、AC-006、AC-008；依赖：T015；证据：断言空范围、超过十种或目录外 tag 不请求麦克风/recognizer，有效范围可发起，停止后无新增采集/字幕，中断提示被已停止替换且允许再次发起）
 - [ ] T020 [P] [US3] 编写完整 Playwright E2E 生命周期场景，覆盖停止后与中断条件消除后的手动重新发起、不补发期间内容及后续语音恢复中文字幕（`tests/e2e/journeys/stop-and-restart.spec.ts`；来源：IQA-005、IQA-006、IQA-008、FR-005、FR-006、FR-008；依赖：T015；证据：关联真实输入、状态转换、停止期间无输出和新 generation 的中文字幕）
 
 ### 实现
