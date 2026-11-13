@@ -51,7 +51,7 @@ V1 是单容器 Web App：浏览器采集英语会议语音，服务端使用 Az
 
 ## Component 边界与项目结构
 
-Coding 获准创建或修改的仓库根路径如下：
+Coding 获准创建或修改的仓库根路径仅限以下项目符号列出的路径：
 
 - `package.json`
 - `package-lock.json`
