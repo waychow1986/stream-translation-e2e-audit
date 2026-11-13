@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0009",
+  "stage": "specification.gate",
+  "outcome": "repair",
+  "summary": "Specification 对已批准业务范围的派生完整，但遗漏了 Constitution 明确要求的 Playwright 端到端验证约束及其 governance 来源，需修复后再审批。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0009.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "SPEC-GOV-001",
+      "severity": "high",
+      "owner": "specification",
+      "route": "current_stage",
+      "summary": "测试策略和 IQA 场景虽要求端到端真实验证，但未纳入 Constitution 第四节明确规定的 Playwright 端到端测试约束，Intent 追踪矩阵也未为该验证义务标注 governance 来源。",
+      "recommendation": "在不新增产品行为的前提下，将 Playwright 明确纳入端到端验证策略及相关 IQA 场景，并在追踪关系中以 Constitution 第四节标注 governance 来源。"
+    }
+  ]
+}
