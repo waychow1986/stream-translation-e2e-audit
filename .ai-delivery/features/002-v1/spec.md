@@ -145,11 +145,10 @@
 | 权威来源 | 来源类型 | User Story / Requirement | 验收标准 | 验收场景 | 必要派生说明 |
 |---|---|---|---|---|---|
 | INT-004 | direct | US-001、FR-001 | AC-001 | IQA-001、IQA-003 | 无 |
-| INT-005 | direct | US-002、FR-002 | AC-002 | IQA-002、IQA-003 | 无 |
-| INT-008 | direct | FR-003 | AC-002 | IQA-002、IQA-003 | 无 |
+| INT-005 | direct | US-002、FR-002、SC-002 | AC-002 | IQA-002、IQA-003 | 无 |
+| INT-008（已接受 BQ-001 人工答案） | clarification | US-002、FR-003 | AC-002 | IQA-002、IQA-003 | 人工澄清将 V1 源语言限定为英语、目标语言限定为中文。 |
 | INT-001、INT-002、INT-003、INT-006 | direct | US-003、FR-004、NFR-001、SC-001、SC-003 | AC-003 | IQA-001、IQA-003 | 无 |
 | INT-001、INT-002、INT-003、INT-006 | closure | FR-005、SC-003 | AC-004 | IQA-001、IQA-003 | 若字幕不保持发言顺序或不表达对应含义，“中文可读内容”和“持续字幕体验”将无法判定是否实现。 |
-| INT-005、INT-008 | direct | SC-002 | AC-002 | IQA-002 | 无 |
 | INT-004、INT-005、INT-006、INT-007 | direct | SC-004 | AC-001、AC-002、AC-003、AC-004 | IQA-003 | 无 |
 
 ## 开放产品问题
