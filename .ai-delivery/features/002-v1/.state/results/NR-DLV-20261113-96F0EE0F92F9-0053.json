@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0053",
+  "stage": "bugfix.assessment",
+  "outcome": "needs_input",
+  "summary": "BUG-001 确认为 QA 浏览器启动条件未满足的环境故障，需在按人工意见配置的 QA 云执行环境中重跑。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/bugfixes/BUG-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0053.json"
+    }
+  ],
+  "inputsNeeded": [
+    {
+      "id": "INPUT-001",
+      "description": "提供基于现有 QA_BASE_URL、已为 Chromium 配置 --unsafely-treat-insecure-origin-as-secure=<QA_BASE_URL>、fake media、麦克风权限和合成英语 WAV 注入条件的 QA 云执行环境，并重跑 IQA-001 至 IQA-003。",
+      "why": "当前结果只有等待字幕超时，且没有证据证明人工指定的浏览器安全来源与合成语音注入条件已经满足，因此无法执行完整用户流程或定位产品链路。",
+      "suggestedProvider": "operator",
+      "targetPath": ".ai-delivery/features/002-v1/bugfixes/BUG-001/assessment.md",
+      "affectsTaskIds": [
+        "IQA-001",
+        "IQA-002",
+        "IQA-003"
+      ]
+    }
+  ],
+  "decisionsNeeded": []
+}
