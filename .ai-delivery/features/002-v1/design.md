@@ -21,7 +21,7 @@ V1 是单容器 Web App：浏览器采集英语会议语音，服务端使用 Az
 ## 架构概览（Architecture）
 
 1. React 页面经 `getUserMedia` 获得麦克风流，`AudioWorklet` 转换为 16 kHz、单声道、16-bit little-endian PCM；用户开始采集后建立同源 WebSocket。
-2. Fastify WebSocket 会话接收控制消息和二进制 PCM 帧，把音频写入 Microsoft Cognitive Services Speech SDK for JavaScript 的 `PushAudioInputStream`。Speech adapter 以 `DefaultAzureCredential({managedIdentityClientId: AZURE_CLIENT_ID})` 获取 `https://cognitiveservices.azure.com/.default` 的 Entra access token；以完整 `AZURE_SPEECH_ENDPOINT` 构造 `SpeechConfig.fromEndpoint(new URL(endpoint))`，将 access token 原文赋给 `SpeechConfig.authorizationToken` 后创建 recognizer，并对配置的英语候选执行 continuous language identification。endpoint 必须是 SDK 接受的 Speech resource endpoint，不从 host 猜测 region、resource ID 或拼接其他 endpoint。
+2. Fastify WebSocket 会话接收控制消息和二进制 PCM 帧，把音频写入 Microsoft Cognitive Services Speech SDK for JavaScript 的 `PushAudioInputStream`。Speech adapter 以 `DefaultAzureCredential({managedIdentityClientId: AZURE_CLIENT_ID})` 获取 `https://cognitiveservices.azure.com/.default` 的 Entra access token；以完整 `AZURE_SPEECH_ENDPOINT` 构造 `SpeechConfig.fromEndpoint(new URL(endpoint))`，并把平台注入的 Speech ARM 资源 ID 与 access token 严格构造为 Azure AI Speech SDK 要求的 `aad#<resourceId>#<accessToken>`，再赋给 `SpeechConfig.authorizationToken` 后创建 recognizer。资源 ID 必须来自 `AZURE_SPEECH_RESOURCE_ID`，格式为 `/subscriptions/<subscriptionId>/resourceGroups/<resourceGroup>/providers/Microsoft.CognitiveServices/accounts/<accountName>`；endpoint 必须是 SDK 接受的 Speech resource endpoint，应用不得从 endpoint host 猜测或推导资源 ID、region 或其他 endpoint。recognizer 对配置的英语候选执行 continuous language identification。
 3. Speech 的 finalized recognition result 被赋予单调递增 `segmentId`。仅检测为英语且含非空文本的片段进入单会话 FIFO 翻译队列；interim result 不进入翻译，避免重复字幕。
 4. Foundry adapter 使用同一个 `DefaultAzureCredential` 与 project endpoint 获取 OpenAI client，调用平台注入的 deployment，固定目标语言为简体中文，启用流式输出并将 reasoning effort 设为 `none`。
 5. 服务端按 `segmentId` 串行消费翻译流，经 WebSocket 发出增量与完成事件。浏览器只在前一片段完成后提交后一片段到可见字幕列表，从协议和 UI 两层保证顺序。
@@ -32,7 +32,7 @@ V1 是单容器 Web App：浏览器采集英语会议语音，服务端使用 Az
 | 决策 ID | 选择 | 理由 | 已考虑替代方案 | 来源 |
 |---|---|---|---|---|
 | TD-001 | Node.js 22 LTS、TypeScript、React、Vite、Fastify 单仓单容器 | 与批准基线一致，最少组件即可同时提供 UI、WebSocket 和平台端点 | 多服务拆分会增加当前范围不需要的部署与一致性成本 | 技术基线；Constitution 二 |
-| TD-002 | 浏览器以 WebSocket 上传 PCM，服务端统一调用 Speech 和 Foundry | 当前 WI-only 平台不提供候选 A 所需的 Speech key/service-token broker；Entra bearer token 具有 Pod 的资源级角色且不能缩限到浏览器会话，不得转交浏览器。服务端可用官方 SDK 的 `authorizationToken` 且令牌始终留在 Pod | 候选 A 只在存在可安全签发的 Speech service token 时可实施；当前输入不满足。直接实现 Speech WebSocket protocol 会绕开批准的 SDK 约束 | FR-001～FR-005；技术基线；平台画像 |
+| TD-002 | 浏览器以 WebSocket 上传 PCM，服务端统一调用 Speech 和 Foundry | 当前 WI-only 平台不提供候选 A 所需的 Speech key/service-token broker；Entra bearer token 具有 Pod 的资源级角色且不能缩限到浏览器会话，不得转交浏览器。服务端按官方 SDK 契约用平台注入的 Speech ARM 资源 ID 和 bearer token 构造 `aad#<resourceId>#<accessToken>`，且该值始终留在 Pod | 候选 A 只在存在可安全签发的 Speech service token 时可实施；当前输入不满足。直接实现 Speech WebSocket protocol 会绕开批准的 SDK 约束 | FR-001～FR-005；技术基线；平台画像 |
 | TD-003 | Speech continuous recognition + continuous language identification；内部候选为 `en-US` 与 `zh-CN`，只接受检测语言主标签 `en` | 自动检测必须有可区分候选；`zh-CN` 仅作检测对照，不形成额外受支持语言，所有非 `en` 结果停止进入翻译 | 单一英语候选不构成实质自动检测；扩大到更多语言会超出 V1 | FR-002、FR-003、AC-002 |
 | TD-004 | finalized Speech segment 串行进入每会话 FIFO Foundry 翻译队列 | 避免 interim 修订造成重复，并确定性保持发言顺序 | 并行翻译吞吐更高但可能乱序；整段结束后翻译违反流式要求 | FR-004、FR-005、NFR-001 |
 | TD-005 | Foundry 流式 Chat Completions，deployment 来自环境，`reasoning_effort: none`，固定中文翻译 system instruction | 满足持续翻译、指定模型部署与关闭 reasoning 的基线 | 非流式 completion 不满足连续性；静默替换模型违反基线 | INT-007、FR-004；技术基线 |
@@ -106,13 +106,13 @@ WebSocket `GET /ws/translation` 使用 JSON control/event 与 binary audio frame
 
 ## 安全、隐私、身份与 Secret
 
-服务端使用带 `AZURE_CLIENT_ID` 的 `DefaultAzureCredential`；AKS 中解析为 Workload Identity。Speech 令牌 scope 固定为 `https://cognitiveservices.azure.com/.default`，初次创建 recognizer 前取得令牌；每次取得令牌后在 `expiresOnTimestamp` 前 5 分钟刷新，若本次剩余有效期不足 10 分钟则在剩余有效期中点刷新。刷新成功时同时更新保存的 `SpeechConfig.authorizationToken` 与活动 `SpeechRecognizer.authorizationToken`，保证长会话不沿用过期值。若到期前刷新失败，则终止会话为 `SPEECH_UNAVAILABLE`，不改用 key。Foundry 使用 Azure Identity client 的内建令牌刷新。禁止 API key、连接字符串、浏览器 token、`.env` secret 和测试凭据。客户端只能访问同源应用，WebSocket 校验 `Origin` 与当前 Host；CSP 至少限制 `default-src 'self'`、`connect-src 'self'`、`media-src 'self' blob:`，并禁止 frame 嵌入与对象资源。
+服务端使用带 `AZURE_CLIENT_ID` 的 `DefaultAzureCredential`；AKS 中解析为 Workload Identity。Speech 令牌 scope 固定为 `https://cognitiveservices.azure.com/.default`，初次创建 recognizer 前取得令牌，并以已校验的 `AZURE_SPEECH_RESOURCE_ID` 构造 `aad#${resourceId}#${accessToken}` 后同时设置 `SpeechConfig.authorizationToken` 与新建 recognizer 的 `authorizationToken`。每次取得令牌后在 `expiresOnTimestamp` 前 5 分钟刷新，若本次剩余有效期不足 10 分钟则在剩余有效期中点刷新；刷新成功时使用同一个已校验资源 ID 和新 access token 重新构造完整 authorization token，同时更新保存的 `SpeechConfig.authorizationToken` 与所有活动 `SpeechRecognizer.authorizationToken`，保证长会话不沿用旧的完整 token。禁止保存或赋值原始 bearer token，禁止在续期时省略 `aad#` 前缀或资源 ID。若到期前刷新失败，则终止会话为 `SPEECH_UNAVAILABLE`，不改用 key。Foundry 使用 Azure Identity client 的内建令牌刷新。禁止 API key、连接字符串、浏览器 token、`.env` secret 和测试凭据。客户端只能访问同源应用，WebSocket 校验 `Origin` 与当前 Host；CSP 至少限制 `default-src 'self'`、`connect-src 'self'`、`media-src 'self' blob:`，并禁止 frame 嵌入与对象资源。
 
 麦克风仅在用户启动后申请，停止、失败、断连和页面卸载均停止所有 MediaStreamTrack。服务端不持久化音频、转写或字幕；结构化日志对消息正文、音频、authorization header、token 和 Azure response body 一律禁记。容器以数字 UID `10001` 运行，不提权，不依赖可写应用目录；临时运行数据只保存在内存。
 
 ## 配置、可观测性与运维
 
-必需环境变量为 `PORT`（镜像默认 `3000`）、`AIDELIVERY_DELIVERY_ID`、`AIDELIVERY_CANDIDATE_SHA`、`AZURE_CLIENT_ID`、`AZURE_SPEECH_ENDPOINT`、`AZURE_AI_PROJECT_ENDPOINT`（兼容读取平台同时提供的 `FOUNDRY_PROJECT_ENDPOINT`，两者同时存在且不一致则启动失败）及 `AZURE_AI_MODEL_DEPLOYMENT_NAME`；QA 环境变量 `AZURE_AI_MODEL_DEPLOYMENT` 只供 QA 记录环境，不进入应用。Speech endpoint 必须是绝对 HTTPS URL，SDK 原样使用；该 deployment 必须由环境指向已批准的 gpt-sol-6.1，不允许应用静默改用其他模型。目标语言、协议版本、音频格式、语言检测候选和 reasoning 关闭均为代码内受测不变量，不允许环境变量扩大产品范围。仅测试进程允许显式 `APP_ADAPTER_MODE=deterministic`；生产构建或非 `NODE_ENV=test` 收到该值必须拒绝启动，防止 fake adapter 进入候选部署。
+必需环境变量为 `PORT`（镜像默认 `3000`）、`AIDELIVERY_DELIVERY_ID`、`AIDELIVERY_CANDIDATE_SHA`、`AZURE_CLIENT_ID`、`AZURE_SPEECH_ENDPOINT`、`AZURE_SPEECH_RESOURCE_ID`、`AZURE_AI_PROJECT_ENDPOINT`（兼容读取平台同时提供的 `FOUNDRY_PROJECT_ENDPOINT`，两者同时存在且不一致则启动失败）及 `AZURE_AI_MODEL_DEPLOYMENT_NAME`；QA 环境变量 `AZURE_AI_MODEL_DEPLOYMENT` 只供 QA 记录环境，不进入应用。Speech endpoint 必须是绝对 HTTPS URL，SDK 原样使用；Speech resource ID 必须是平台从已配置 Speech 资源元数据取得并原样注入的完整 ARM ID，应用启动时按 `/subscriptions/<非空>/resourceGroups/<非空>/providers/Microsoft.CognitiveServices/accounts/<非空>` 结构（resource provider 大小写不敏感）校验，缺失或不合法即启动失败，绝不从 endpoint、DNS 或 account name 推导。该 deployment 必须由环境指向已批准的 gpt-sol-6.1，不允许应用静默改用其他模型。目标语言、协议版本、音频格式、语言检测候选和 reasoning 关闭均为代码内受测不变量，不允许环境变量扩大产品范围。仅测试进程允许显式 `APP_ADAPTER_MODE=deterministic`；生产构建或非 `NODE_ENV=test` 收到该值必须拒绝启动，防止 fake adapter 进入候选部署。
 
 stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentId、状态、依赖名、调用结果分类和错误码；不输出正文、音频、token、endpoint query 或完整 Azure 异常。核心事件包括启动配置结果、会话状态转换、Speech/Foundry 调用开始与结束、取消、资源释放和健康状态。平台未提供 telemetry backend 或告警系统，设计不新增外部观测产品；候选日志仅用于故障关联。
 
@@ -126,7 +126,7 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 
 多阶段根目录 Dockerfile 在 Node.js 22 镜像中执行锁文件安装、类型检查和构建，runtime stage 仅安装生产依赖、复制 server 与静态资源，以 `USER 10001` 启动 `node` 进程并暴露 `3000`。镜像不得包含源码测试输出、凭据或本地环境文件。
 
-`runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。根 `package.json` 必须把 `@playwright/test` 固定为 devDependency 且锁入 `package-lock.json`。`developerSetupCommands` 依次为 `npm ci --ignore-scripts` 与 `npx playwright install --with-deps chromium`，因此 clean `ubuntu-latest` 不依赖预存 browser cache 或系统 Chromium；`developerValidationCommands` 固定分类为：`staticAnalysis` 执行 `npm run typecheck`，`build` 执行 `npm run build`，`developerTests` 执行 `npm run test:unit`，`integrationTests` 执行 `npm run test:contract`，`functionalTests` 执行 `bash tests/scripts/developer-functional.sh`。该脚本启动显式 deterministic adapter 的测试进程并通过锁定依赖的 `npx --no-install playwright test` 执行 `npm run test:e2e`，同时须通过 `bash -n`。
+`runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。候选部署平台必须从其已配置的 Speech 资源对象读取完整 ARM resource ID，并连同既有 `AZURE_SPEECH_ENDPOINT` 一起以 `AZURE_SPEECH_RESOURCE_ID` 注入 Pod；这两个值必须指向同一资源。该值不是 secret，但不得由应用从 endpoint host 猜测；平台若不能提供该资源 ID，候选部署必须在启动前失败，而不是以原始 bearer token 尝试 Speech 连接。根 `package.json` 必须把 `@playwright/test` 固定为 devDependency 且锁入 `package-lock.json`。`developerSetupCommands` 依次为 `npm ci --ignore-scripts` 与 `npx playwright install --with-deps chromium`，因此 clean `ubuntu-latest` 不依赖预存 browser cache 或系统 Chromium；`developerValidationCommands` 固定分类为：`staticAnalysis` 执行 `npm run typecheck`，`build` 执行 `npm run build`，`developerTests` 执行 `npm run test:unit`，`integrationTests` 执行 `npm run test:contract`，`functionalTests` 执行 `bash tests/scripts/developer-functional.sh`。该脚本启动显式 deterministic adapter 的测试进程并通过锁定依赖的 `npx --no-install playwright test` 执行 `npm run test:e2e`，同时须通过 `bash -n`。
 
 平台以不可变 candidate SHA 构建镜像并部署到交付命名空间，LoadBalancer 80 转发容器 3000。应用无 schema 和持久化迁移，故无 migration command。Rollout 以 `/healthz` 与 `/candidate-identity` 通过为最低部署条件；真实功能通过 Independent QA 判定。失败时把 Service/Deployment 恢复到上一已知通过的不可变镜像；活动会话会终止，用户需手动重新开始，不执行数据回滚。
 
@@ -137,7 +137,7 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 | 格式、类型、构建、单元测试 | Coding 与 Candidate checks | Copilot 沙箱及 `ubuntu-latest` clean runner | Node.js 22、锁文件；无 Azure 凭据 | 命令退出码、状态机/排序/脱敏测试报告 | Candidate checks 在不可变提交重跑并给出结果 |
 | adapter 与协议 contract | Coding 与 Candidate checks | 本地进程、记录式 fake adapter | 无真实服务、无凭据 | Speech/Foundry 参数、协议 schema、错误/取消映射测试 | CI 对不可变提交重跑；不构成真实集成证据 |
 | 本地 Playwright 功能流 | Coding 与 Candidate checks | Chromium、合成 WAV、进程内确定性 adapter | Playwright；无 Azure 凭据 | 较早字幕在后续音频期间可见、顺序及失败判定记录 | CI 重跑；仅证明应用编排，不构成 IQA 通过 |
-| 镜像与候选身份 | 候选验证 Delivery validation | ACR、AKS、LoadBalancer | 平台 OIDC/Workload Identity 与注入变量 | Dockerfile、health/identity contract test | 镜像构建、非 root、部署、health 与 candidate identity 结果 |
+| 镜像与候选身份 | 候选验证 Delivery validation | ACR、AKS、LoadBalancer | 平台 OIDC/Workload Identity，以及含 `AZURE_SPEECH_RESOURCE_ID` 的注入变量 | Dockerfile、health/identity contract test；配置 contract 验证缺少/畸形 resource ID 时启动失败 | 镜像构建、非 root、部署、health、candidate identity 与 Speech ARM ID 注入结果 |
 | IQA-001～IQA-003 真实完整流程 | Independent QA | 候选 AKS 公网地址、真实 Azure Speech/Foundry | 平台预装锁定 npm 依赖及 Chromium、QA OIDC、Speech/Foundry 环境变量、内嵌且与仓库 fixture 同 hash 的合成英语音频 | `qa-run.sh`、Playwright 黑盒断言、fixture/内嵌数据一致性 contract test、结果 JSON schema test | 发言期间字幕进展、自动检测英语、中文概念词组顺序及同一 segment 的 Azure Speech result ID/Foundry request ID |
 | 发布回归 | release verification | 已批准候选镜像和目标运行环境 | 目标环境 Workload Identity | 已通过候选与 Independent QA 的不可变 SHA | 发布后 health/identity 及必要完整流程结果；不替代前述 IQA |
 
@@ -160,8 +160,8 @@ Independent QA 的 `runtime/qa-run.sh` 不调用 TTS，也不依赖仓库 checko
 - 启动失败：检查必需环境变量是否存在、两个 Foundry endpoint 是否冲突、端口是否可绑定；不得打印变量值或 token。
 - health 失败：核对进程、静态资源构建产物和配置校验日志。`/healthz` 不探测 Azure，因此 Azure 故障不应伪装成 Pod 未存活。
 - candidate identity 失败：核对平台注入的 delivery ID/candidate SHA 与部署镜像是否一致；不得使用构建时硬编码值。
-- 无 Speech 结果：按 sessionId 哈希关联 `speech.call` 状态，检查 Workload Identity role、endpoint 公网可达性、PCM 格式和检测结果；禁止在日志中加入音频或转写正文。
-- Speech 会话约十分钟后失败：检查 `expiresOnTimestamp` 驱动的 refresh 事件和活动 recognizer 的 `authorizationToken` 更新结果；不得通过延长、记录或向浏览器下发 token 绕过。
+- 无 Speech 结果：按 sessionId 哈希关联 `speech.call` 状态，检查 Workload Identity role、`AZURE_SPEECH_ENDPOINT` 与 `AZURE_SPEECH_RESOURCE_ID` 是否由平台取自同一 Speech 资源、endpoint 公网可达性、PCM 格式和检测结果；禁止从 host 猜测资源 ID，也禁止在日志中加入资源 ID、音频或转写正文。
+- Speech 会话约十分钟后失败：检查 `expiresOnTimestamp` 驱动的 refresh 事件，以及配置和活动 recognizer 是否都更新为由同一资源 ID 与新 access token 构造的完整 `aad#<resourceId>#<accessToken>`；不得改为原始 bearer token，也不得通过延长、记录或向浏览器下发 token 绕过。
 - 有转写无字幕：检查 Foundry deployment 环境变量、Workload Identity role、stream 结束原因及 FIFO 状态；不得切换未批准模型或回退到批量伪结果。
 - 字幕乱序或只在结束后出现：检查 segmentId/revision、不变量、串行队列和客户端 reducer；使用合成多片段语音复现，不能以最终全文正确视为通过。
 - 资源未释放：确认 stop、disconnect、failure、SIGTERM 均关闭 MediaStreamTrack、PushAudioInputStream、recognizer、模型 stream 与 WebSocket。
