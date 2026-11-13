@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0004",
+  "stage": "intent",
+  "outcome": "passed",
+  "summary": "已将人工确认的英语到中文 V1 范围纳入业务意图，当前无待决业务问题。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/intent.md"
+    }
+  ]
+}
