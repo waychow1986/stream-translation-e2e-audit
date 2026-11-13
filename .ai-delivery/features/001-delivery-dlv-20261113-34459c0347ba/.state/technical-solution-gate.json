@@ -3,15 +3,15 @@
   "passed": false,
   "findings": [
     {
-      "id": "TS-PRED-001",
+      "id": "TS-SELF-001",
       "severity": "high",
-      "scope": "predecessor",
-      "artifact": "spec.md",
-      "owner": "specification",
-      "summary": "完整自动检测语言集合要求在批准技术候选中不可实现",
-      "recommendation": "由 Specification 依据已确认的服务能力重新决定并批准可实现的源语言检测产品行为及相应 FR、SC、AC、IQA；不得由 Technical Solution 或 Coding 擅自采用预选语言、截断集合、抽样验收、分批或并行 recognizer 作为替代。Specification 修复获批后，重新生成完整可执行的 Technical Solution。",
-      "route": "upstream_exception",
-      "reasonType": "infeasible"
+      "scope": "self",
+      "artifact": "design.md",
+      "owner": "technical-solution",
+      "summary": "状态模型未定义中断状态下的手动停止",
+      "recommendation": "在 Technical Solution 的状态模型、生命周期处理和相应验证责任中明确 interrupted 状态下手动停止到 stopped 的转换，固定其用户可见结果及幂等资源清理契约，并保持 Specification 已批准行为不变。",
+      "route": "current_stage",
+      "reasonType": "coverage"
     }
   ]
 }
