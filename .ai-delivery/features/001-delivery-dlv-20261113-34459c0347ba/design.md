@@ -10,7 +10,7 @@
 
 - 仓库当前只有 AI Delivery 制品和项目说明，没有应用代码、依赖清单或部署定义；本 Feature 是绿地 Web App。
 - 已批准行为是：参会者在每次发起前，从 Azure AI Speech 当时支持的语言中选择一至十种候选源语言；浏览器在运行期间采集麦克风，Speech 在该范围内持续转写并自动检测实际语言，`gpt-sol-6.1` 持续翻译为中文，页面实时显示字幕。
-- 产品状态为未启动、运行中、中断和已停止；发起、停止和中断后恢复均由参会者手动触发，不补发停止或中断期间内容。
+- 产品状态为未启动、运行中、中断和已停止；参会者可在运行中或中断时手动停止，也可在停止后或中断条件消除后手动重新发起；不补发停止或中断期间内容。
 - 技术栈采用 Node.js 22 LTS、TypeScript、React、Vite、Fastify、Microsoft Azure Speech SDK、Playwright 和单一 Linux 容器；生产承载为 Azure Container Apps。
 - 浏览器直连 Azure AI Speech；Fastify BFF 只签发短期 Speech token、发布受支持语言配置、代理 Azure AI Foundry 翻译流并提供健康检查，不转发音频。
 - 应用不设账户、数据库、消息总线、持久卷或会话存储。音频、转写和字幕仅在当前浏览器或请求内存中存在。
@@ -58,7 +58,7 @@ BFF 不保存跨请求 session。浏览器拥有本次流程状态、递增 sequ
 | TD-005 | 仅翻译 finalized segment，浏览器按 sequence 串行处理 | 避免 interim 修订造成重复字幕，保证显示顺序 | 翻译 interim 会产生撤回；并行请求会乱序 | FR-004、NFR-001、AC-004 |
 | TD-006 | BFF 以 `fetch` POST 返回 `text/event-stream` | POST 可携带结构化 segment，ReadableStream 支持增量和 AbortSignal | EventSource 仅 GET；WebSocket 对逐段单向输出过重 | FR-004、FR-006 |
 | TD-007 | Foundry `/openai/v1/responses`，`stream: true`，`reasoning.effort: "none"` | 固定 gpt-sol-6.1 的流式、关闭 reasoning 调用契约 | 非流式破坏连续体验；其他模型或启用 reasoning 违反基线 | INT-006、FR-004、技术基线 |
-| TD-008 | 浏览器状态机加 `generation` 隔离生命周期；停止/中断统一 abort 并销毁 recognizer | 明确拒绝晚到事件，满足手动恢复与不补发 | 自动重连或自动重试会改变恢复语义 | FR-005～FR-008 |
+| TD-008 | 浏览器状态机加 `generation` 隔离生命周期；运行中或中断时的手动停止与故障中断共用可重入终止协调器，统一 abort 并销毁 recognizer | 明确拒绝晚到事件；保证中断清理尚在进行时仍可手动停止，且重复清理安全、最终稳定为已停止 | 为各触发分别清理会产生竞态；自动重连或自动重试会改变恢复语义 | FR-005～FR-008、US-003 业务状态 |
 | TD-009 | 不持久化音频、转写、字幕或 session；每次新发起清空页面字幕 | 满足会议中展示并避免形成未批准归档 | 数据库或浏览器持久化扩大范围和暴露面 | Specification 范围外、Constitution 三 |
 | TD-010 | 单一多阶段 Docker image，Container Apps revision 发布 | 组件最少，SPA/BFF 契约原子发布，可按 revision 回滚 | 独立静态站点增加跨源与部署协调；App Service 非选定基线 | 技术基线 |
 | TD-011 | Vitest 做状态机与 contract test，Playwright 做真实完整流程 | 快速反馈与用户可见证据职责分离 | mock-only、health 或 smoke 不能证明验收行为 | Constitution 四、测试策略 |
@@ -81,6 +81,7 @@ BFF 不保存跨请求 session。浏览器拥有本次流程状态、递增 sequ
 - 每个 sequence 在当前 generation 最多提交一次翻译；FIFO 必须等待 `translation.completed` 后处理下一项。
 - 字幕必须来自同一 sequence 的 finalized transcript；interim、错误正文和晚到事件不得显示为中文字幕。
 - 任一步骤不能继续时先原子切换为 `interrupted`，再关闭采集、recognizer、队列和在途 fetch。
+- `interrupted` 接受手动停止；无论中断清理已完成、正在进行或尚未开始，都必须复用同一终止任务并最终进入 `stopped`，不得因重复关闭、晚到失败或清理错误回退到 `interrupted`。
 - 停止或中断期间不缓冲内容；重新发起创建新 session/generation，只处理之后的语音。
 
 状态转换：
@@ -91,6 +92,8 @@ BFF 不保存跨请求 session。浏览器拥有本次流程状态、递增 sequ
 | `idle` / `stopped` / `interrupted` | 手动发起 | 候选范围无效；不请求麦克风、不启动 recognizer | 保持当前状态并允许修正 |
 | `idle` / `stopped` / `interrupted` | 手动发起 | 候选范围有效但设备许可或采集启动失败；关闭已创建资源 | `interrupted` |
 | `running` | 手动停止 | 递增 generation，停止并销毁所有资源 | `stopping` → `stopped` |
+| `interrupted` | 手动停止 | 将目标终态固定为 `stopped`，递增 generation；加入或重用当前终止任务，对所有资源执行幂等清理 | `stopping` → `stopped` |
+| `stopped` | 重复到达的手动停止事件 | 不改变 generation；对空资源句柄执行成功 no-op | `stopped` |
 | `running` / `starting` | 必需步骤失败 | 记录无正文错误并关闭所有资源 | `interrupted` |
 | 任意页面状态 | 页面卸载 | best-effort 关闭资源，不保存状态 | 生命周期结束 |
 
@@ -138,7 +141,9 @@ Speech finalized event 必须同时包含非空 text 与候选范围内的 detec
 
 ### 停止、中断与并发
 
-手动停止先进入内部 `stopping` 并递增 generation，再停止麦克风 track、调用 recognizer stop/close、abort 全部 fetch、清空队列，最后进入 `stopped`。采集失败、Speech cancellation、检测语言缺失/越界、BFF/Foundry 网络或协议错误均执行相同资源关闭并进入 `interrupted`。晚到 callback 因 generation/state 不匹配被丢弃。
+运行中手动停止先进入内部 `stopping` 并递增 generation，再通过单一终止协调器停止麦克风 track、调用 recognizer stop/close、abort 全部 fetch、清空队列，最后进入 `stopped`。采集失败、Speech cancellation、检测语言缺失/越界、BFF/Foundry 网络或协议错误先将用户可见状态切换为 `interrupted`，再调用同一协调器关闭资源。终止协调器在首次调用时立即从状态机摘除并快照资源句柄、清空 FIFO，以一个共享 promise 串行化关闭；对已停止或不存在的 track、recognizer、AbortController 和队列再次调用均为成功 no-op，各关闭步骤用 settled 结果完成，且不得记录会议正文。
+
+参会者在 `interrupted` 时点击停止，状态机立即把目标终态固定为 `stopped` 并进入内部 `stopping`：若故障清理仍在进行则加入同一 promise，若已完成则对空句柄执行成功 no-op；清理结束后界面必须以“已停止”替换中断提示，停止操作保持可重复，不再采集或产生新字幕，并允许确认或调整候选范围后重新发起。停止意图优先于并发到达的失败 callback；后者以及其他晚到 callback 因 generation/state 不匹配被丢弃，不能把 `stopped` 改回 `interrupted`。清理步骤自身失败只写入无正文诊断并继续释放其余资源，不阻止进入 `stopped`，因为 generation 隔离已经禁止旧资源结果进入当前界面。
 
 多个页面彼此独立。BFF 无状态，不跨请求协调顺序；一个 segment 的 SSE 由接收请求的 replica 持有。replica 排空时终止在途上游请求，浏览器进入中断。任何恢复均须用户手动重新发起。
 
@@ -297,12 +302,12 @@ data: {"sessionId":"uuid","segmentSequence":1,"code":"TRANSLATION_UPSTREAM","sta
 | 验证类型 | 责任阶段 | 环境来源 | 依赖/凭据 | Coding 证据 | 下游结果 |
 |---|---|---|---|---|---|
 | 静态分析与类型检查 | Coding / 平台 CI | Node.js 22 LTS clean runner | lockfile；无云凭据 | 可复现命令和配置 | CI 执行后形成真实结果 |
-| 状态机 unit test | Coding / 平台 CI | Node.js 22 LTS + Vitest | 内存 adapter；无会议正文 | 发起、停止、晚到事件、中断、重新发起、FIFO 测试 | CI 确认代码级生命周期 |
+| 状态机 unit test | Coding / 平台 CI | Node.js 22 LTS + Vitest | 内存 adapter；无会议正文 | 发起、运行中停止、中断后停止、重复停止、中断清理与停止竞态、清理步骤失败、晚到事件、重新发起、FIFO 测试 | CI 确认 `interrupted → stopping → stopped`、停止优先及幂等资源清理契约 |
 | API/adapter contract test | Coding / 平台 CI | Fastify inject + 受控 provider stub | 无 Azure secret | schema、SSE、abort、错误映射、Origin、日志脱敏测试 | CI 确认内部契约，不替代真实集成 |
 | 构建与容器验证 | 平台 CI | clean runner + container runtime | 声明的 Node/npm 与 image builder | lockfile build、非 root、live/ready 辅助检查 | CI 确认候选可构建运行 |
 | Speech/Foundry 真实集成 | 远程 integration | 获批 Azure integration 环境 | Speech resource/key、Foundry deployment、Managed Identity | adapter 与 Playwright integration 命令；非敏感语音资产 | 验证 1～10 候选 LID、流式翻译、关闭 reasoning 契约 |
-| 完整浏览器功能 E2E | 远程 integration / Playwright | 部署后的同一 immutable candidate | Chromium 麦克风输入、真实 Azure 服务与凭据 | AC-001～AC-008 场景和证据采集逻辑 | 形成连续字幕、边界、启停、中断、恢复真实结果 |
-| Independent QA 验收 | Independent QA | 与 candidate 对应的 QA target | 每场景可核验非敏感语音、真实 Azure 服务 | IQA-001～IQA-008 可执行 Playwright 套件和输入/输出关联格式 | QA 独立判定全部场景；IQA-003 逐一覆盖本次所选语言 |
+| 完整浏览器功能 E2E | 远程 integration / Playwright | 部署后的同一 immutable candidate | Chromium 麦克风输入、真实 Azure 服务与凭据 | AC-001～AC-008 场景；在每类中断可见后手动停止，断言进入已停止、无新增采集/字幕并可重新发起；证据采集逻辑 | 形成连续字幕、边界、运行中及中断后停止、中断、恢复真实结果 |
+| Independent QA 验收 | Independent QA | 与 candidate 对应的 QA target | 每场景可核验非敏感语音、真实 Azure 服务 | IQA-001～IQA-008 可执行 Playwright 套件和输入/输出关联格式；IQA-007 中断证据后执行 US-003 已批准的手动停止并记录 `interrupted → stopped` | QA 独立判定全部场景及中断后停止转换；IQA-003 逐一覆盖本次所选语言 |
 | 发布验证与回滚 | release verification | 同 image digest 的 Container Apps revision | deployment identity、上一已验证 revision | `deployment.json`、health 与 rollback 说明 | 确认 candidate SHA、digest、QA target 一致及回滚可执行 |
 
 Coding 必须在 `runtime/deployment.json` 的 `developerSetupCommands` 声明 clean runner 幂等准备步骤；`developerValidationCommands` 以唯一分类对象提供非空 `staticAnalysis`、`build`、`developerTests`，并仅在候选确实提供真实环境命令时声明 `integrationTests` 或 `functionalTests`。命令不得为 no-op，也不得在失败后临时安装未声明依赖。
@@ -313,13 +318,13 @@ Coding 必须在 `runtime/deployment.json` 的 `developerSetupCommands` 声明 c
 2. 执行 `runtime/deployment.json` 声明的 `staticAnalysis`、`build` 和 `developerTests` 命令；这些结果只证明静态、构建和开发者测试。
 3. 构建 `Dockerfile`，以非 secret 配置、平台 secret reference 和 Managed Identity 部署 immutable candidate 到获批 Azure integration 环境。
 4. 先验证 `/health/live`、`/health/ready`、语言目录、Speech token、1 种与 10 种候选语言的真实 recognizer，以及 Foundry 流式中文输出和关闭 reasoning 契约。
-5. 使用 Playwright 和真实麦克风输入执行 AC-001～AC-008：连续语音、范围内自动检测、无效范围、手动发起/停止、各阶段中断和手动重新发起；保留输入、状态、candidate 标识与用户可见字幕关联证据。
+5. 使用 Playwright 和真实麦克风输入执行 AC-001～AC-008：连续语音、范围内自动检测、无效范围、手动发起/停止、各阶段中断、中断状态下手动停止和手动重新发起；对中断后停止保留 `interrupted → stopping → stopped`、停止后无新增采集/字幕、重复停止无副作用及后续可重新发起的证据；保留输入、状态、candidate 标识与用户可见字幕关联证据。
 6. Independent QA 在同一不可变 candidate 的 QA target 独立执行 IQA-001～IQA-008。mock、页面加载、health 或构造状态不得替代结果。
 
 ## 支持 Runbook
 
 - **配置/readiness 失败**：检查非 secret 配置、语言目录 JSON、deployment 名称和 secret/identity 引用；不得在日志或工单粘贴 secret。新 revision 未 ready 时保持上一 revision 流量。
-- **Speech token/recognition 中断**：按 requestId/sessionId 查看脱敏阶段日志及 Azure Speech 状态，核对 region、secret reference、quota 和本次候选 tag；恢复后由用户重新发起。
+- **Speech token/recognition 中断**：按 requestId/sessionId 查看脱敏阶段日志及 Azure Speech 状态，核对 region、secret reference、quota 和本次候选 tag；用户可在中断状态手动停止并看到已停止，恢复后再手动重新发起。
 - **语言检测中断**：核对实际输入是否属于本次候选范围、SDK 是否返回候选内 tag、目录版本是否对应目标 resource；不得猜测默认语言或静默修改范围。
 - **翻译中断**：检查 Managed Identity、endpoint、`gpt-sol-6.1` deployment、quota、Responses streaming 和 reasoning-disabled 支持；不得换模、返回原文冒充中文或自动重放。
 - **字幕乱序或停止后仍显示**：作为 generation/sequence/abort 契约缺陷停止 rollout，保留不含正文的 requestId、sequence 和状态证据，回滚上一 revision。
