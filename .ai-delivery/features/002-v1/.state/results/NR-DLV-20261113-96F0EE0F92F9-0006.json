@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0006",
+  "stage": "intent.gate",
+  "outcome": "passed",
+  "summary": "Intent 忠实覆盖已批准的业务意图与人工澄清答案，内部一致且未越界，当前无审批阻塞项。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0006.json"
+    }
+  ],
+  "findings": []
+}
