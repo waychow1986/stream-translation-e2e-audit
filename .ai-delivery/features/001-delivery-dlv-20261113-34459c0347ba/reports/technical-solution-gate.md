@@ -3,43 +3,36 @@
 ## 门禁信息
 
 - **阶段：** `technical-solution`
-- **检查轮次：** 1
+- **检查轮次：** 2
 - **当前制品：** `design.md`
 - **直接前置制品：** `spec.md`、`technical-baseline.md`
 - **结论：** `需要修复`
 
 ## 内部自检
 
-已检查架构、组件边界、机器可读根路径、数据与状态模型、接口契约、安全边界、配置与运维、部署回滚、验证责任和实施就绪状态。方案的结构、职责边界、契约覆盖和验证分层总体完整，但两个被批准技术基线明确列为先决条件的关键服务能力尚未得到确认，因而 `implementationReady: true` 缺少可行性依据。
+已检查实施就绪状态、技术上下文、架构与替代方案、状态和数据模型、机器可读根路径、接口契约、安全边界、配置运维、部署回滚、验证责任及开放决策。`design.md` 已将 `implementationReady` 设为 `false`，明确禁止 Coding 猜测参数、缩减语言范围或把条件式候选当作可执行架构；上一轮关于语言能力未闭合却声明实施就绪的当前阶段根因已被真实能力核对取代，不再重复报告原 finding。其余已设计部分内部一致，并明确标识尚不可实施的候选契约。
+
+`gpt-sol-6.1` 目标 deployment 的 API、streaming 与关闭 reasoning 能力仍缺少获批环境证据。`design.md` 没有伪造结果，并正确停止实施；该证据由已批准 technical baseline 明定为“基线批准前”先决条件，当前阶段无权提供目标订阅资源或重批基线。由于本次任务只允许将上游例外路由给 `specification`，本报告不把同一缺口再次包装为 `technical-solution` 当前阶段修复项，也不生成不符合路由契约的 finding。
 
 ## 直接前置一致性检查
 
-方案总体忠实覆盖 `spec.md` 的 `FR-001`～`FR-007`、`NFR-001`、`AC-001`～`AC-007`，并遵循批准技术基线选定的浏览器直连 Speech、BFF 代理 Foundry 翻译、SSE、单容器及 Azure Container Apps 边界。当前未发现需要推翻或澄清 Specification 的严格上游例外；阻塞项均属于 Technical Solution 尚未完成批准基线要求的技术可行性闭合。
+已逐项检查 `FR-001`～`FR-007`、`NFR-001`、`AC-001`～`AC-007` 以及技术基线。方案忠实保留浏览器采集、持续转写、自动语言检测、中文流式字幕、手动启停、中断可见和手动恢复行为，也遵循单容器、无持久化、凭据隔离、真实 Playwright E2E 及不可变候选等基线约束。
+
+对 `AC-002` 的技术核对已经闭合：批准的三个候选均依赖 Microsoft Azure AI Speech continuous language identification，而单个 continuous recognizer 最多接受 10 个候选语言；验收要求所指服务完整自动检测语言集合超过 10 个。预选、截断、分批或并行 recognizer 都会改变已批准产品契约。该结果不是 Technical Solution 可继续选择实现细节消除的缺口，而是 `spec.md` 的明确义务在全部批准候选中不可实现，满足严格的 Specification 上游例外条件。
 
 ## 阻塞项
 
-### TS-SELF-001 单会话完整自动检测语言集合的可行性尚未闭合
+### TS-PRED-001 完整自动检测语言集合要求在批准技术候选中不可实现
 
 - **严重性：** `high`
-- **范围：** `self`
-- **制品：** `design.md`
-- **责任 Agent：** `technical-solution`
-- **路由：** `current_stage`
-- **原因类型：** `incomplete`
-- **证据：** `spec.md` 的 `AC-002` 要求在同一运行流程中无需预选语言地逐一覆盖验收时服务可自动检测的完整语言集合；`technical-baseline.md` 明确要求先验证目标 SDK、订阅和区域能否在单次会话覆盖该集合，并指出候选数量或 API 上限会使所有候选架构均无法满足该标准。`design.md` 第 7、16、25、238、260 行仍将该能力作为部署或下游 integration 才确认的条件，同时第 5 行声明 `implementationReady: true`，未给出所选浏览器 Speech SDK 配置能够承载完整集合的已确认可行性结论。
-- **修复建议：** 在 Technical Solution 中完成目标 SDK、订阅和区域下单次 continuous language identification 候选能力与完整权威语言集合的可行性闭合，并据结果确定可实施方案；若验证表明所有批准候选架构均无法满足 `AC-002`，应以该具体不可实现证据触发 Specification 上游例外，而不是继续声明实施就绪或把决定推迟到发布门禁。
-
-### TS-SELF-002 指定模型的流式且关闭 reasoning 能力尚未闭合
-
-- **严重性：** `high`
-- **范围：** `self`
-- **制品：** `design.md`
-- **责任 Agent：** `technical-solution`
-- **路由：** `current_stage`
-- **原因类型：** `incomplete`
-- **证据：** `technical-baseline.md` 明确规定，目标订阅、区域或 `gpt-sol-6.1` deployment 是否同时支持流式输出与关闭 reasoning 必须在基线批准前确认，且不得静默换模或伪造配置。`design.md` 第 7、16、57、178、226、260 行选择了 `/openai/v1/responses`、`stream: true` 和 `reasoning.effort: "none"`，但仍把该组合的真实支持情况留作部署或远程 integration 前置条件；在没有确认所选 deployment 与参数契约可用时，第 5 行的实施就绪结论缺少依据。
-- **修复建议：** 在 Technical Solution 中闭合目标 `gpt-sol-6.1` deployment 对所选 API、流式输出及关闭 reasoning 参数的兼容性，并据确认结果固定可执行契约；若批准 deployment 无法满足基线约束，应停止实施就绪声明并按治理路径处理基线冲突，不得由 Coding 自行换模或降级。
+- **范围：** `predecessor`
+- **制品：** `spec.md`
+- **责任 Agent：** `specification`
+- **路由：** `upstream_exception`
+- **原因类型：** `infeasible`
+- **证据：** `spec.md` 的 `FR-002`、`SC-002`、`IQA-002` 和 `AC-002` 要求同一流程无需预选语言地覆盖验收时服务可自动检测的完整语言集合。`technical-baseline.md` 第 22 行规定：若 continuous language identification 的有限候选列表或上限低于完整集合，则任何批准候选都不能满足 `AC-002`。`design.md` 第 7～12、18～19、29～31、59～69、267～280 和 292～295 行记录本轮能力核对结果：Microsoft Azure AI Speech continuous LID 单 recognizer 最多 10 个候选语言，而权威支持集合超过 10 个；候选 A、B、C 仅改变 SDK 或托管位置，均不消除同一服务上限。
+- **修复建议：** 由 Specification 在保留已批准业务目标的前提下，依据已确认的服务能力重新决定并批准可实现的源语言检测产品行为及相应 `FR`、`SC`、`AC`、`IQA`；不得由 Technical Solution 或 Coding 擅自采用预选语言、截断集合、抽样验收、分批或并行 recognizer 作为替代。Specification 修复获批后，重新生成完整可执行的 Technical Solution。
 
 ## 通过条件
 
-Technical Solution 必须分别闭合上述两项目标环境能力与所选实现契约的可行性，消除与 `implementationReady: true` 的矛盾，并保持对 `spec.md`、`technical-baseline.md` 及 Constitution 的其余覆盖不变。
+Specification 必须消除 `AC-002` 与已批准技术候选真实能力之间的不可实现义务并获得批准；随后 Technical Solution 应依据修复后的直接前置制品重新固定可执行架构、完整 provider contract 和验证责任，确认所有基线先决条件后方可声明实施就绪。
