@@ -16,6 +16,42 @@ test("English draft revises and final replaces it without changing older fixed c
   expect(fixedAt - draftAt).toBeLessThan(3_000);
 });
 
+test("continuous English records independent 6/5/3 second timing boundaries", async ({ page }) => {
+  test.setTimeout(25_000);
+  await installDriver(page, "continuousEnglish");
+  await page.goto("/");
+  await page.getByRole("button", { name: "开始字幕" }).click();
+
+  const draftUpdates: Array<{ text: string; at: number }> = [];
+  for (const text of ["持续草稿一", "持续草稿二", "持续草稿三", "持续草稿四", "持续草稿五"]) {
+    await expect(page.locator('[data-caption-state="draft"]')).toHaveText(text);
+    draftUpdates.push({ text, at: await page.evaluate(() => performance.now()) });
+  }
+  await expect(page.locator('[data-caption-state="fixed"]')).toHaveText("持续英文完整译文");
+  const fixedAt = await page.evaluate(() => performance.now());
+  const timeline = await page.evaluate(
+    () =>
+      (
+        window as typeof window & {
+          __CAPTION_PROTOCOL_TIMELINE__: Array<{ type: "speech-start" | "interim" | "final"; at: number }>;
+        }
+      ).__CAPTION_PROTOCOL_TIMELINE__
+  );
+  const speechStartedAt = timeline.find(({ type }) => type === "speech-start")?.at;
+  const finalAt = timeline.find(({ type }) => type === "final")?.at;
+
+  expect(speechStartedAt).toBeDefined();
+  expect(finalAt).toBeDefined();
+  const firstDraftAt = draftUpdates[0]!.at;
+  expect(finalAt! - speechStartedAt!).toBeGreaterThanOrEqual(15_000);
+  expect(firstDraftAt - speechStartedAt!).toBeLessThan(6_000);
+  for (let index = 1; index < draftUpdates.length; index += 1) {
+    expect(draftUpdates[index]!.at - draftUpdates[index - 1]!.at).toBeLessThanOrEqual(5_000);
+  }
+  expect(draftUpdates.at(-1)!.at).toBeLessThan(finalAt!);
+  expect(fixedAt - finalAt!).toBeLessThan(3_000);
+});
+
 test("an interleaved next segment waits for the previous final and appends with a new id", async ({ page }) => {
   await installDriver(page, "interleaved");
   await page.goto("/");

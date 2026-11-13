@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-type Scenario = "english" | "interleaved" | "chinese" | "many" | "recovery" | "lifecycle";
+type Scenario = "english" | "continuousEnglish" | "interleaved" | "chinese" | "many" | "recovery" | "lifecycle";
 
 interface RecognitionInput {
   delay: number;
@@ -57,6 +57,10 @@ export async function installDriver(page: Page, scenario: Scenario): Promise<Pro
   await page.addInitScript(
     ({ selected, inputs }) => {
       let sessionNumber = 0;
+      const protocolWindow = window as typeof window & {
+        __CAPTION_PROTOCOL_TIMELINE__: Array<{ type: "speech-start" | "interim" | "final"; at: number }>;
+      };
+      protocolWindow.__CAPTION_PROTOCOL_TIMELINE__ = [];
       Object.defineProperty(window, "__CAPTION_PROTOCOL_ADAPTER__", {
         value: {
           createSpeechSession(callbacks: {
@@ -73,12 +77,21 @@ export async function installDriver(page: Page, scenario: Scenario): Promise<Pro
                     __recordCaptionProtocolEvent(event: { type: "start" | "stop" | "token"; value?: string }): Promise<void>;
                   }
                 ).__recordCaptionProtocolEvent({ type: "start" });
+                protocolWindow.__CAPTION_PROTOCOL_TIMELINE__.push({ type: "speech-start", at: performance.now() });
                 const events =
                   selected === "recovery" && sessionNumber > 1
                     ? [{ delay: 0, text: "new session", language: "en-US" as const, final: true }]
                     : inputs;
                 for (const event of events) {
-                  timers.push(window.setTimeout(() => callbacks.onRecognition(event), event.delay));
+                  timers.push(
+                    window.setTimeout(() => {
+                      protocolWindow.__CAPTION_PROTOCOL_TIMELINE__.push({
+                        type: event.final ? "final" : "interim",
+                        at: performance.now()
+                      });
+                      callbacks.onRecognition(event);
+                    }, event.delay)
+                  );
                 }
               },
               async stop() {
@@ -114,6 +127,16 @@ function recognitionInputs(scenario: Scenario): RecognitionInput[] {
       { delay: 1_400, text: "hello world", language: "en-US", final: true }
     ];
   }
+  if (scenario === "continuousEnglish") {
+    return [
+      { delay: 0, text: "continuous phrase one ", language: "en-US", final: false },
+      { delay: 3_500, text: "continuous phrase one two ", language: "en-US", final: false },
+      { delay: 7_000, text: "continuous phrase one two three ", language: "en-US", final: false },
+      { delay: 10_500, text: "continuous phrase one two three four ", language: "en-US", final: false },
+      { delay: 14_000, text: "continuous phrase one two three four five ", language: "en-US", final: false },
+      { delay: 15_500, text: "continuous phrase one two three four five", language: "en-US", final: true }
+    ];
+  }
   if (scenario === "interleaved") {
     return [
       { delay: 0, text: "first segment", language: "en-US", final: true },
@@ -145,6 +168,16 @@ function recognitionInputs(scenario: Scenario): RecognitionInput[] {
 }
 
 function translatedText(text: string, mode: string): string {
+  const continuousDrafts = new Map([
+    ["continuous phrase one", "持续草稿一"],
+    ["continuous phrase one two", "持续草稿二"],
+    ["continuous phrase one two three", "持续草稿三"],
+    ["continuous phrase one two three four", "持续草稿四"],
+    ["continuous phrase one two three four five", "持续草稿五"]
+  ]);
+  if (text.startsWith("continuous phrase")) {
+    return mode === "final" ? "持续英文完整译文" : (continuousDrafts.get(text.trim()) ?? "");
+  }
   if (text === "first segment") return "第一段";
   if (text === "second segment") return "第二段";
   if (text === "new session") return "新会话";

@@ -179,3 +179,57 @@ Coding 沙箱无 Azure 或部署凭据，因此未执行真实 Speech continuous
 ### 实施结论
 
 `CONV-001`—`CONV-004` 已在批准路径内完成定向修复，全部必做本地验证通过，无待输入、待决定或受阻任务；本次结果为 `passed`。下游真实环境证据未在本报告中提前声称通过。
+
+## Coding Session NR-DLV-20261113-BCCA3652FB86-0026-b01
+
+### 实施范围
+
+本次为 `coding-repair` 模式，定向完成 `CONV-004` 在既有 `T015` 范围内缺失的英文持续输入与时限辅助证据：扩展协议级 Playwright fake Speech 输入至 15.5 秒，记录语音开始、五次可见草稿更新、final 识别和 fixed 时点，并分别断言 6 秒、5 秒和 3 秒边界。未修改生产行为、任务文本或 runtime 契约。
+
+### 完成与受阻任务
+
+`T015` 对应的持续英文协议级辅助测试缺口已修复并重验。任务在 Session 起点已全部勾选，本次没有由 `[ ]` 改为 `[x]` 的任务，因此 `progress.completedTaskIds` 为空；没有未勾选任务或受阻项，`progress.blockedTaskIds` 为空。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `tests/e2e/english-captions.spec.ts` | 新增 15.5 秒连续英文场景，逐次记录五个草稿可见时点并独立断言 6/5/3 秒边界 | T015 / CONV-004 |
+| `tests/e2e/support/fake-driver.ts` | 新增持续变化的英文协议输入、协议时点记录及确定性翻译响应 | T015 / CONV-004 |
+| `.ai-delivery/features/003-v1/reports/implementation.md`、`.ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0026-b01.json` | 追加本 Session 真实修复证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| NFR-002 / AC-008 / IQA-005 / CONV-004 | `src/client/session-controller.ts`、`src/client/translation-scheduler.ts` | `tests/e2e/english-captions.spec.ts`、`tests/e2e/support/fake-driver.ts` | 协议级测试以 15.5 秒连续输入观察五次 final 前草稿更新；首条、相邻更新和 final 后 fixed 三类断言分别通过 |
+| T015 英文草稿修订与最终固定 | `src/client/App.tsx`、`src/client/translation-client.ts` | `tests/e2e/english-captions.spec.ts` | 生产会话、调度、NDJSON client 与 DOM 状态边界仍被完整穿过，Playwright 8/8 通过 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npx playwright test tests/e2e/english-captions.spec.ts -g "continuous English"`（测试先行） | Copilot 沙箱 | 预期失败 | 新场景尚无协议输入，等待首条草稿超时，复现缺失证据 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npx playwright test tests/e2e/english-captions.spec.ts -g "continuous English"`（修复后） | Copilot 沙箱 | 通过 | 1/1 聚焦 Playwright 场景通过，输入从 speech start 到 final 为 15.5 秒 |
+| `npm run staticAnalysis`（首次） | Copilot 沙箱 | 失败后已修复 | strict indexed access 报告三个可能未定义的数组访问；增加非空证明后重跑通过 |
+| `npm run staticAnalysis`、`npm run build` | Copilot 沙箱 | 通过 | TypeScript 严格检查退出码 0；Vite 7.3.8 生产构建成功并清理输出 |
+| `npm run developerTests`、`npm run integrationTests` | Copilot 沙箱 | 通过 | 22/22 unit 与 contract 测试、8/8 contract integration 测试通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright npm run functionalTests` | Copilot 沙箱 | 通过 | 8/8 协议级本地 Playwright 辅助场景通过 |
+| `npm audit --audit-level=moderate` | Copilot 沙箱 | 通过 | 0 个已知漏洞 |
+| `git diff --check`、runtime `bash -n`/`jq` 定向检查及改动内容 secret pattern 扫描 | Copilot 沙箱 | 通过 | 无空白错误、runtime 契约保持有效、改动未发现凭据或私钥模式 |
+
+### Runtime 与下游门禁就绪制品
+
+根目录 `Dockerfile`、`runtime/deployment.json` 和 `runtime/developer-functional-run.sh` 本次无需修改。runtime 脚本语法、8080 端口、`/healthz`、`/candidate-identity` 与无私网声明已定向复核；现有 Candidate checks 将发现并执行扩展后的完整 Playwright 测试集。
+
+### 延后平台证据
+
+本 Session 未访问 Azure、AKS 或部署 URL。真实 Speech/Foundry 的中间结果节奏及部署环境 `IQA-005` 黑盒 6 秒、5 秒、3 秒结果继续由 Candidate validation 与 Independent QA 产生；本地协议 fake 仅提供 Coding 负责的确定性辅助证据，不替代真实集成验收。
+
+### 剩余风险
+
+协议级测试以确定性时间表证明测试和生产客户端边界能够记录并独立判定获批时限，但真实 Speech interim 节奏、网络与 Foundry 首 token 延迟仍可能影响部署环境结果，必须由下游真实环境验证。
+
+### 实施结论
+
+`CONV-004` 指定的 15 秒连续英文输入、全部可见草稿更新记录及独立 6/5/3 秒断言已在 `T015` 批准范围内补齐；全部必做本地验证通过，无待输入、待决定或受阻任务，本次结果为 `passed`。
