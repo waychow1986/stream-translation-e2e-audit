@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0011",
+  "stage": "specification.gate",
+  "outcome": "passed",
+  "summary": "上一轮 Playwright 端到端验证约束及 governance 来源缺失问题已修复，本轮改动未引入新的审批阻塞项。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0011.json"
+    }
+  ],
+  "findings": []
+}
