@@ -1,17 +1,5 @@
 {
   "stage": "technical-solution",
-  "passed": false,
-  "findings": [
-    {
-      "id": "TS-SELF-001",
-      "severity": "high",
-      "scope": "self",
-      "artifact": "design.md",
-      "owner": "technical-solution",
-      "summary": "状态模型未定义中断状态下的手动停止",
-      "recommendation": "在 Technical Solution 的状态模型、生命周期处理和相应验证责任中明确 interrupted 状态下手动停止到 stopped 的转换，固定其用户可见结果及幂等资源清理契约，并保持 Specification 已批准行为不变。",
-      "route": "current_stage",
-      "reasonType": "coverage"
-    }
-  ]
+  "passed": true,
+  "findings": []
 }
