@@ -24,9 +24,10 @@ export class RecordingSpeechAdapter implements SpeechAdapter {
     this.audio = Buffer.concat([this.audio, frame]);
     if (frame.length >= 320 && this.emitted < testSegments.length) {
       const source = testSegments[this.emitted]!;
+      const detectedLanguage = frame[0] === 9 ? "zh-CN" : "en-US";
       const segment = {
         segmentId: ++this.emitted,
-        detectedLanguage: "en-US",
+        detectedLanguage,
         text: source.english,
         isFinal: true as const,
         speechResultId: `test-double:speech-${this.emitted}`

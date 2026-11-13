@@ -8,7 +8,7 @@ export function createAzureFoundryTranslator(config: AppConfig): FoundryTranslat
   const project = new AIProjectClient(config.foundryProjectEndpoint, credential);
   return new FoundryTranslator(async (request) => {
     const openAI = await project.getAzureOpenAIClient();
-    const response = await openAI.chat.completions.create({
+    const pending = openAI.chat.completions.create({
       model: config.modelDeployment,
       messages: [
         { role: "system", content: request.system },
@@ -17,10 +17,9 @@ export function createAzureFoundryTranslator(config: AppConfig): FoundryTranslat
       stream: true,
       reasoning_effort: request.reasoning_effort as never
     }, { signal: request.signal });
+    const { data: response, request_id: requestId } = await pending.withResponse();
     const deltas: string[] = [];
-    let requestId = "";
     for await (const event of response) {
-      requestId ||= String(event.id ?? "");
       const delta = event.choices[0]?.delta?.content;
       if (delta) deltas.push(delta);
     }

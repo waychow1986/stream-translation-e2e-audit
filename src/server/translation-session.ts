@@ -80,6 +80,7 @@ export class TranslationSession {
   private acceptSegment(segment: RecognitionSegment): void {
     if (!this.lifecycle.canEmitBusinessEvent()) return;
     this.emit({ type: "speech.final", segmentId: segment.segmentId, detectedLanguage: segment.detectedLanguage });
+    if (segment.detectedLanguage.toLowerCase().split("-")[0] !== "en") return;
     this.queue.enqueue(segment);
   }
 

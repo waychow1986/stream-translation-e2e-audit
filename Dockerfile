@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
-COPY tsconfig.json tsconfig.server.json vite.config.ts ./
+COPY tsconfig.json vite.config.ts ./
 COPY src ./src
 RUN npm run typecheck && npm run build && npm prune --omit=dev
 
