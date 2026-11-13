@@ -1,0 +1,39 @@
+{
+  "stage": "task-planning",
+  "passed": false,
+  "findings": [
+    {
+      "id": "TASK-SELF-001",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "tasks-implementation.md",
+      "owner": "task-planning",
+      "summary": "翻译请求体安全上限未被任务覆盖",
+      "recommendation": "在翻译 contract test 和对应 route 实现任务中明确加入请求体上限配置、超限拒绝、中断映射，以及不截断、不拆分、不调用上游的完成证据。",
+      "route": "current_stage",
+      "reasonType": "coverage"
+    },
+    {
+      "id": "TASK-SELF-002",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "tasks-implementation.md",
+      "owner": "task-planning",
+      "summary": "语言目录响应的禁止缓存契约未被验证",
+      "recommendation": "在语言目录 API contract test 与 route 实现任务中明确覆盖成功响应的 Cache-Control: no-store，并把断言通过列入完成证据。",
+      "route": "current_stage",
+      "reasonType": "coverage"
+    },
+    {
+      "id": "TASK-SELF-003",
+      "severity": "high",
+      "scope": "self",
+      "artifact": "tasks-implementation.md",
+      "owner": "task-planning",
+      "summary": "生产应用文件系统只读约束未被任务覆盖",
+      "recommendation": "在 Dockerfile、部署契约或二者对应任务中明确落实应用文件系统只读约束，并在候选容器验证任务中加入可复现的只读性检查及完成证据。",
+      "route": "current_stage",
+      "reasonType": "coverage"
+    }
+  ]
+}
