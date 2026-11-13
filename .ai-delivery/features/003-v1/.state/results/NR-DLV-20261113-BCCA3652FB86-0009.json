@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0009",
+  "stage": "specification.gate",
+  "outcome": "passed",
+  "summary": "上一轮 Playwright 端到端验证治理约束及来源分类问题已解决，本轮改动未引入新的阻塞问题。",
+  "artifacts": [],
+  "findings": []
+}

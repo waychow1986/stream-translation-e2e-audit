@@ -16,7 +16,9 @@
 
 ## 结论
 
-- **result：** `verified` / `partial` / `failed`
+<!-- result 字段格式固定，取 `verified`、`partial`、`failed` 之一。 -->
+
+- **result：** `{{result}}`
 - **依据：**
 
 ## 必需下一步

@@ -1,4 +1,5 @@
 name: Delivery Cleanup
+run-name: cleanup ${{ inputs.correlation_id }}
 
 on:
   workflow_dispatch:
@@ -15,10 +16,22 @@ on:
         description: Delivery PostgreSQL role
         required: false
         type: string
+      correlation_id:
+        description: AIDelivery Hub node run correlation identifier
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
+
+# Inputs reach shell scripts only through environment variables, never through
+# expression interpolation inside run scripts.
+env:
+  DELIVERY_ID: ${{ inputs.delivery_id }}
+  POSTGRES_DATABASE: ${{ inputs.postgres_database }}
+  POSTGRES_ROLE: ${{ inputs.postgres_role }}
+  CORRELATION_ID: ${{ inputs.correlation_id }}
 
 jobs:
   cleanup:
@@ -30,15 +43,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${{ inputs.delivery_id }}"
-          database="${{ inputs.postgres_database }}"
-          role="${{ inputs.postgres_role }}"
-          if [[ -n "$database" || -n "$role" ]]; then
-            [[ "$database" =~ ^[A-Za-z0-9_]+$ ]]
-            [[ "$role" =~ ^[A-Za-z0-9_]+$ ]]
+          test -n "$DELIVERY_ID"
+          identifier='^[a-z][a-z0-9_]{0,62}$'
+          if [[ -n "$POSTGRES_DATABASE" && ! "$POSTGRES_DATABASE" =~ $identifier ]]; then
+            echo "::error::postgres_database must match $identifier." >&2
+            exit 1
+          fi
+          if [[ -n "$POSTGRES_ROLE" && ! "$POSTGRES_ROLE" =~ $identifier ]]; then
+            echo "::error::postgres_role must match $identifier." >&2
+            exit 1
           fi
 
       - name: Sign in to Azure with OIDC
+        if: inputs.postgres_database != '' || inputs.postgres_role != ''
         uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -48,6 +65,11 @@ jobs:
       - name: Remove Delivery database resources
         if: inputs.postgres_database != '' || inputs.postgres_role != ''
         shell: bash
+        env:
+          HUB_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          HUB_POSTGRES_SERVER: ${{ vars.AZURE_POSTGRES_SERVER }}
+          HUB_POSTGRES_HOST: ${{ vars.AZURE_POSTGRES_HOST }}
+          HUB_POSTGRES_ADMIN_USER: ${{ vars.AZURE_POSTGRES_ADMIN_USER }}
         run: |
           set -euo pipefail
           sudo apt-get update
@@ -58,8 +80,8 @@ jobs:
           cleanup_firewall() {
             status=$?
             az postgres flexible-server firewall-rule delete \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
+              --server-name "$HUB_POSTGRES_SERVER" \
               --name "$firewall_rule" \
               --yes \
               --output none || {
@@ -70,8 +92,8 @@ jobs:
           trap cleanup_firewall EXIT
 
           az postgres flexible-server firewall-rule create \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-            --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+            --resource-group "$HUB_RESOURCE_GROUP" \
+            --server-name "$HUB_POSTGRES_SERVER" \
             --name "$firewall_rule" \
             --start-ip-address "$runner_ip" \
             --end-ip-address "$runner_ip" \
@@ -83,9 +105,13 @@ jobs:
               --query accessToken \
               --output tsv
           )"
-          admin_connection="host=${{ vars.AZURE_POSTGRES_HOST }} port=5432 dbname=postgres user=${{ vars.AZURE_POSTGRES_ADMIN_USER }} sslmode=require"
-          psql "$admin_connection" \
-            --set ON_ERROR_STOP=1 \
-            --command \
-              "DROP DATABASE IF EXISTS \"${{ inputs.postgres_database }}\" WITH (FORCE)" \
-            --command "DROP ROLE IF EXISTS \"${{ inputs.postgres_role }}\""
+          admin_connection="host=$HUB_POSTGRES_HOST port=5432 dbname=postgres user=$HUB_POSTGRES_ADMIN_USER sslmode=require"
+          commands=()
+          if [[ -n "$POSTGRES_DATABASE" ]]; then
+            commands+=(--command "DROP DATABASE IF EXISTS \"$POSTGRES_DATABASE\" WITH (FORCE)")
+          fi
+          if [[ -n "$POSTGRES_ROLE" ]]; then
+            commands+=(--command "DROP ROLE IF EXISTS \"$POSTGRES_ROLE\"")
+          fi
+          psql "$admin_connection" --set ON_ERROR_STOP=1 "${commands[@]}"
+          echo "Cleanup $CORRELATION_ID removed Delivery database resources."

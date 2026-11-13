@@ -27,7 +27,12 @@
 
 ## 分类与修复就绪决策
 
-- **classification：** `product_defect` / `test_gap` / `environment_failure` /
-  `requirement_ambiguity` / `scope_change`
-- **ready_for_fix：** `true` / `false`
+<!--
+两行字段格式固定，各填一个值：
+classification 取 `product_defect`、`test_gap`、`environment_failure`、`requirement_ambiguity`、`scope_change` 之一；
+ready_for_fix 取 `true` 或 `false`，只有 product_defect 且根因有证据支持时才能为 `true`。
+-->
+
+- **classification：** `{{classification}}`
+- **ready_for_fix：** `{{ready_for_fix}}`
 - **决策依据：**

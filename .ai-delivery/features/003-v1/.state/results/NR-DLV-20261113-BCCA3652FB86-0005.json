@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0005",
+  "stage": "specification",
+  "outcome": "needs_decision",
+  "summary": "已完成实时流式翻译字幕产品规格，尚需产品负责人确定与指定参考实现比较时“不明显慢于”的验收边界。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/spec.md"
+    }
+  ],
+  "decisionsNeeded": [
+    {
+      "id": "PQ-001",
+      "level": "product",
+      "question": "在相同语音输入下，如何判定候选产品“不明显慢于”指定参考实现并达到同等实时体验？",
+      "affects": [
+        "INT-001",
+        "INT-009",
+        "INT-010"
+      ],
+      "options": [
+        {
+          "key": "A",
+          "label": "候选字幕不得持续落后指定参考实现一个或更多已稳定短语；允许由运行波动导致、随后追平的瞬时先后差异。",
+          "recommended": true,
+          "rationale": "最贴近“不明显慢于”的原始约束，且不增加绝对时限。"
+        },
+        {
+          "key": "B",
+          "label": "每个稳定短语的候选字幕首次显示均不得晚于指定参考实现。",
+          "recommended": false,
+          "rationale": "提供更严格的逐短语比较边界。"
+        },
+        {
+          "key": "C",
+          "label": "由产品负责人给出允许候选字幕晚于指定参考实现的明确时间容差。",
+          "recommended": false,
+          "rationale": "提供数值边界，但需要新增获批阈值。"
+        }
+      ]
+    }
+  ]
+}

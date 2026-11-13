@@ -1,0 +1,29 @@
+{
+  "containerPort": 8080,
+  "healthPath": "/healthz",
+  "candidateIdentityPath": "/candidate-identity",
+  "migrationCommand": [],
+  "developerSetupCommands": [
+    "npm ci --ignore-scripts"
+  ],
+  "developerValidationCommands": {
+    "staticAnalysis": [
+      "npm run staticAnalysis"
+    ],
+    "build": [
+      "npm run build"
+    ],
+    "developerTests": [
+      "npm run developerTests"
+    ],
+    "integrationTests": [
+      "npm run integrationTests"
+    ],
+    "functionalTests": [
+      "npm run functionalTests"
+    ]
+  },
+  "developerFunctionalTestScript": ".ai-delivery/features/003-v1/runtime/developer-functional-run.sh",
+  "requiresPrivateNetwork": false,
+  "postgresql": null
+}
