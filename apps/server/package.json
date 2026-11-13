@@ -1,0 +1,20 @@
+{
+  "name": "@stream-translation/server",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fastify/static": "10.1.10",
+    "fastify": "5.12.8"
+  },
+  "main": "dist/index.js"
+}

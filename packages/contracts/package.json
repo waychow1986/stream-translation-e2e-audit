@@ -1,0 +1,20 @@
+{
+  "name": "@stream-translation/contracts",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "zod": "4.6.7"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts"
+}
