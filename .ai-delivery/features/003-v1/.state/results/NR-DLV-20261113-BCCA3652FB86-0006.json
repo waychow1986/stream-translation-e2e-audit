@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0006",
+  "stage": "specification",
+  "outcome": "passed",
+  "summary": "已依据批准意图与人工澄清完成技术无关、可追溯且可验收的实时流式翻译字幕产品规格。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/spec.md"
+    }
+  ]
+}
