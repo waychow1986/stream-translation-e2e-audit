@@ -2,7 +2,7 @@
 
 ## 执行边界
 
-执行脚本先读取平台提供的 QA 标识与地址，在五分钟内重试 DNS、TLS、健康检查和 `/candidate-identity`，并确认返回的 `deliveryId`、`candidateSha` 与平台输入一致。随后通过 Azure Speech TTS 合成含两个可区分语义片段及中间停顿的英语 WAV，以 Playwright、Chromium fake microphone、`getUserMedia` 和 AudioWorklet 对部署候选执行一次黑盒完整流程。健康与身份检查只用于候选就绪判定，不作为功能验收证据。
+执行脚本先读取平台提供的 QA 标识与地址，在五分钟内重试 DNS、TLS、健康检查和 `/candidate-identity`，并确认返回的 `deliveryId`、`candidateSha` 与平台输入一致。随后使用锁定版本的 Azure Speech SDK、平台 OIDC token、Speech endpoint 与完整 ARM resource ID 合成含两个可区分语义片段及中间停顿的英语 WAV，不自行拼接 TTS REST 路径；再以 Playwright、Chromium fake microphone、`getUserMedia` 和 AudioWorklet 对部署候选执行一次黑盒完整流程。健康与身份检查只用于候选就绪判定，不作为功能验收证据。
 
 脚本不访问仓库 fixture，不修改工作区；临时音频仅写入系统临时目录，最终只向 `QA_RESULT_PATH` 写入一个 JSON 结果。首次 QA 不执行 Bugfix 复测，`bugfixResults` 为空数组。
 
@@ -10,7 +10,7 @@
 
 - [ ] IQA-001 英语发言期间持续出现中文字幕
   - **追溯：** INT-001、INT-002、INT-003、INT-004、INT-006；US-001、US-003；FR-001、FR-004、FR-005；NFR-001；AC-001、AC-003、AC-004。
-  - **输入/命令：** 通过 Azure Speech TTS 合成依次表达“项目计划”和“2027 年预算”的英语 WAV；用 Playwright 启动 Chromium fake microphone，点击“开始翻译”，记录浏览器送入的 16 kHz PCM 样本进度、可见字幕变化和 WebSocket 事件，待两个片段完成后点击“停止翻译”。
+  - **输入/命令：** 通过 Azure Speech SDK 使用平台 OIDC token、Speech endpoint 与完整 ARM resource ID 合成依次表达“项目计划”和“2027 年预算”的英语 WAV；用 Playwright 启动 Chromium fake microphone，点击“开始翻译”，记录浏览器送入的 16 kHz PCM 样本进度、可见字幕变化和 WebSocket 事件，待两个片段完成后点击“停止翻译”。
   - **预期结果：** 第二个语义片段仍在输入时，第一个片段对应的中文字幕已经可见；最终至少两个字幕按输入顺序呈现，并分别表达“项目计划”和“2027 年预算”的含义。
   - **所需证据：** 第一条字幕出现时及第二段语音输入期间的 PCM 样本位置、字幕文本与变化顺序，以及停止边界前后的 Playwright 黑盒观察记录。
 

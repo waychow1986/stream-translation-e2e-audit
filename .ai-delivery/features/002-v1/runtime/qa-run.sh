@@ -77,6 +77,11 @@ if [[ -z "${AZURE_SPEECH_ENDPOINT:-}" ]]; then
   exit 0
 fi
 
+if [[ -z "${AZURE_SPEECH_RESOURCE_ID:-}" ]]; then
+  write_environment_failure "测试素材生成前置失败：QA 环境未提供 AZURE_SPEECH_RESOURCE_ID。"
+  exit 0
+fi
+
 speech_token="$(az account get-access-token \
   --resource "https://cognitiveservices.azure.com/" \
   --query accessToken -o tsv 2>"${temp_dir}/token-error" || true)"
@@ -85,25 +90,56 @@ if [[ -z "${speech_token}" ]]; then
   exit 0
 fi
 
-cat > "${temp_dir}/speech.ssml" <<'SSML'
-<speak version="1.0" xml:lang="en-US">
+if ! QA_SPEECH_TOKEN="${speech_token}" node 2>"${temp_dir}/tts-error" <<'NODE'
+const fs = require("node:fs");
+const sdk = require("microsoft-cognitiveservices-speech-sdk");
+
+const speechConfig = sdk.SpeechConfig.fromEndpoint(
+  new URL(process.env.AZURE_SPEECH_ENDPOINT)
+);
+speechConfig.authorizationToken =
+  `aad#${process.env.AZURE_SPEECH_RESOURCE_ID}#${process.env.QA_SPEECH_TOKEN}`;
+speechConfig.speechSynthesisOutputFormat =
+  sdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm;
+
+const ssml = `<speak version="1.0" xml:lang="en-US">
   <voice name="en-US-AvaNeural">
     The first topic is the project plan.
     <break time="5000ms"/>
     The second topic is the budget for the year twenty twenty-seven.
   </voice>
-</speak>
-SSML
+</speak>`;
+const synthesizer = new sdk.SpeechSynthesizer(speechConfig);
 
-tts_url="${AZURE_SPEECH_ENDPOINT%/}/cognitiveservices/v1"
-if ! curl --silent --show-error --fail --max-time 60 \
-  -X POST "${tts_url}" \
-  --oauth2-bearer "${speech_token}" \
-  -H "Content-Type: application/ssml+xml" \
-  -H "X-Microsoft-OutputFormat: riff-16khz-16bit-mono-pcm" \
-  --data-binary "@${temp_dir}/speech.ssml" \
-  --output "${audio_path}" 2>"${temp_dir}/tts-error"; then
+synthesizer.speakSsmlAsync(
+  ssml,
+  (result) => {
+    try {
+      if (result.reason !== sdk.ResultReason.SynthesizingAudioCompleted) {
+        const cancellation = sdk.CancellationDetails.fromResult(result);
+        throw new Error(
+          `Speech synthesis did not complete: reason=${result.reason}, ` +
+          `cancellation=${cancellation.reason}, code=${cancellation.ErrorCode}`
+        );
+      }
+      fs.writeFileSync(process.env.QA_AUDIO_PATH, Buffer.from(result.audioData));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    } finally {
+      synthesizer.close();
+    }
+  },
+  (error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    synthesizer.close();
+    process.exitCode = 1;
+  }
+);
+NODE
+then
   write_environment_failure "测试素材生成前置失败：Azure Speech TTS 未生成合成 WAV。$(tr '\n' ' ' < "${temp_dir}/tts-error" | cut -c1-300)"
+  unset speech_token
   exit 0
 fi
 unset speech_token

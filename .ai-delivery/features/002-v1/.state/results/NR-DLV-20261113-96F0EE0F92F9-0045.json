@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0045",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已修复 Independent QA 合成语音前置，改由 Azure Speech SDK 使用平台身份与资源契约生成 WAV。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/tasks-qa.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/runtime/qa-run.sh"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0045.json"
+    }
+  ]
+}
