@@ -74,9 +74,9 @@ Coding 可写路径授权清单：
 - `vite.config.ts`
 - `playwright.config.ts`
 
-`src/client/` 包含 React 入口、Speech adapter、翻译 stream client、调度器、caption reducer 和固定视窗组件；`src/server/` 包含 Fastify 进程、环境配置、Azure credential/token provider、Foundry adapter、接口 schema、日志脱敏和平台端点；`src/shared/` 包含双方共享的 contract 与运行时校验。`tests/unit/` 验证状态机和调度器，`tests/contract/` 验证 BFF 与 adapter 契约，`tests/e2e/` 提供本地 Playwright 辅助测试，`test-assets/audio/` 保存可重复的合成英中 WAV 及其 UTF-8 文本 manifest。
+src/client 包含 React 入口、Speech adapter、翻译 stream client、调度器、caption reducer 和固定视窗组件；src/server 包含 Fastify 进程、环境配置、Azure credential/token provider、Foundry adapter、接口 schema、日志脱敏和平台端点；src/shared 包含双方共享的 contract 与运行时校验。tests/unit 验证状态机和调度器，tests/contract 验证 BFF 与 adapter 契约，tests/e2e 提供本地 Playwright 辅助测试，test-assets/audio 保存可重复的合成英中 WAV 及其 UTF-8 文本 manifest。
 
-根目录 `Dockerfile`、`.dockerignore`、包管理文件以及 `.ai-delivery/features/003-v1/runtime/deployment.json`、`.ai-delivery/features/003-v1/runtime/developer-functional-run.sh` 由平台另行固定授权，故不列入上述清单。`.ai-delivery/features/003-v1/runtime/qa-run.sh` 由 Independent QA 在候选部署后独立编写，Coding 不得创建、预置或嵌入其内容。Vite/TypeScript 的本地输出为 `dist/`、`coverage/`、`test-results/`、`playwright-report/`；通过现有或平台授权的根 `.gitignore` 忽略，若根 `.gitignore` 不存在则构建和测试命令必须清理这些输出，不得为此越界修改仓库。
+根目录 Dockerfile、.dockerignore、包管理文件以及 Feature runtime 中的平台制品由平台另行固定授权，故不列入上述清单。Independent QA 的运行脚本由该阶段在候选部署后独立编写，Coding 不得创建、预置或嵌入其内容。Vite/TypeScript 的本地输出为 dist、coverage、test-results、playwright-report；通过现有或平台授权的根 ignore 配置忽略，若该配置不存在则构建和测试命令必须清理这些输出，不得为此越界修改仓库。
 
 ## 数据流、状态、并发与生命周期
 
