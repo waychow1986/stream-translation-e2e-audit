@@ -4,9 +4,9 @@
 
 V1 是单容器 Web App：浏览器采集英语会议语音，服务端使用 Azure AI Speech 连续识别并自动检测英语，再使用 Azure AI Foundry 模型把已确认的转写片段流式翻译成中文，浏览器按原始片段顺序逐步显示字幕。实现采用 Node.js 22 LTS、TypeScript、React、Vite 与 Fastify，部署到平台提供的 AKS；不使用数据库、消息总线、对象存储或会话持久化。
 
-平台在候选环境以 Workload Identity 提供 Azure 身份，并注入 Speech endpoint、Foundry project endpoint 与模型 deployment 名称。Coding 沙箱无 Azure 凭据，只能产生确定性的本地证据；真实服务和部署证据由候选验证及 Independent QA 产生。当前批准范围没有数值化延迟、容量、可用率或准确率目标，因此设计仅保证可观察的流式顺序与生命周期，不虚构数值承诺。
+平台在候选环境以 Workload Identity 提供 Azure 身份，并注入 Speech endpoint、Foundry project endpoint 与模型 deployment 名称；Speech SDK 的 Entra 契约还要求部署平台从目标 Speech 资源元数据取得并注入完整 ARM resource ID。Coding 沙箱无 Azure 凭据，只能产生确定性的本地证据；真实服务和部署证据由候选验证及 Independent QA 产生。当前批准范围没有数值化延迟、容量、可用率或准确率目标，因此设计仅保证可观察的流式顺序与生命周期，不虚构数值承诺。
 
-实现就绪状态：`true`。已批准产品范围、技术基线与平台能力足以完成实现，没有需要 Coding 决定的技术项，也没有未解决的业务或产品问题。
+实现就绪状态：`true`。已批准产品范围与技术基线足以完成 Coding，没有需要 Coding 决定的技术项，也没有未解决的业务或产品问题；`AZURE_SPEECH_RESOURCE_ID` 是候选部署前由 operator 提供的云资源输入，不阻塞代码实现，但在平台具备注入契约前阻塞真实部署验证。
 
 ## 治理与技术约束
 
@@ -102,7 +102,7 @@ WebSocket `GET /ws/translation` 使用 JSON control/event 与 binary audio frame
 - `session.stopped`：表示 stop 截止音频对应的 Speech callback 已结束且所有已接受片段均已产生 final；这是最后一个业务事件。
 - `session.failed`：仅含稳定错误码 `INVALID_AUDIO`、`UNSUPPORTED_LANGUAGE`、`SPEECH_UNAVAILABLE`、`MODEL_UNAVAILABLE`、`PROTOCOL_ERROR` 或 `INTERNAL_ERROR`；不包含会议正文、Azure 原始响应或凭据。Specification 未批准错误文案，因此 UI 只结束当前采集，不把具体呈现样式纳入验收。
 
-所有 JSON 以 TypeBox schema 在边界验证；未知字段拒绝，未知消息类型触发 `PROTOCOL_ERROR`。协议版本为整数 `1`；不兼容版本拒绝连接。V1 不承诺跨版本兼容，后续破坏性变更必须提升 `protocolVersion`。Speech adapter contract 接收 PCM push stream并产生按序 finalized segment；Foundry adapter contract 接收单个 finalized 英语片段并产生中文 delta/final。contract test 用记录式 fake 验证请求参数、reasoning 关闭、取消传播、错误映射与不记录正文，并精确断言 stop 后音频拒绝、draining 可输出截止前结果、`session.stopped` 后零业务事件。真实 adapter 由 Independent QA 验证。
+所有 JSON 以 TypeBox schema 在边界验证；未知字段拒绝，未知消息类型触发 `PROTOCOL_ERROR`。协议版本为整数 `1`；不兼容版本拒绝连接。V1 不承诺跨版本兼容，后续破坏性变更必须提升 `protocolVersion`。Speech adapter contract 接收 PCM push stream并产生按序 finalized segment；Foundry adapter contract 接收单个 finalized 英语片段并产生中文 delta/final。contract test 用记录式 fake 验证 Speech 初次配置和活动 recognizer 续期都精确使用 `aad#<resourceId>#<accessToken>`、缺失或畸形 resource ID 时启动失败、请求参数、reasoning 关闭、取消传播、错误映射与不记录正文，并精确断言 stop 后音频拒绝、draining 可输出截止前结果、`session.stopped` 后零业务事件。真实 adapter 由 Independent QA 验证。
 
 ## 安全、隐私、身份与 Secret
 
