@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0062",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已按人工审批意见修正 Azure Speech TTS 合成路径，并完成 Independent QA 计划与执行脚本自检。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/tasks-qa.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/runtime/qa-run.sh"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0062.json"
+    }
+  ]
+}
