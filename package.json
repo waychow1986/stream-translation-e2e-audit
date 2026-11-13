@@ -9,7 +9,7 @@
   "scripts": {
     "clean": "rm -rf dist coverage test-results playwright-report",
     "staticAnalysis": "npm run clean && tsc --noEmit",
-    "build": "npm run clean && vite build",
+    "build": "npm run clean && vite build && npm run clean",
     "developerTests": "npm run clean && node --test --experimental-strip-types tests/unit/*.test.ts tests/contract/*.test.ts && npm run clean",
     "integrationTests": "npm run clean && node --test --experimental-strip-types tests/contract/*.test.ts && npm run clean",
     "functionalTests": "npm run clean && playwright test && npm run clean",
