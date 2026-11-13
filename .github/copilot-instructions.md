@@ -1,91 +1,52 @@
-# GitHub-native 交付指令
+# AI Delivery 平台指令
 
-本仓库为每个 SDLC 阶段使用相互隔离的 GitHub Copilot cloud session。不同 Session
-不共享聊天历史或 sandbox 状态；唯一获批准的阶段交接方式是已提交的仓库内容。必须从
-`.ai-delivery/context.json` 的 `activeFeatureDirectory` 解析当前迭代目录，并将每个
-Feature 制品写入该目录。绝不能修改 `.ai-delivery/features/` 下的其他目录；已发布和
-以前的迭代目录均不可变。缺少 `.ai-delivery/context.json` 是阻塞错误，不得猜测或创建
-其他制品布局。正式 QA 缺陷使用独立的
-`.ai-delivery/bugfixes/<BUG-ID>-<slug>/` 目录，绝不能将修复制品写入 Feature 目录。
+本仓库由 AIDelivery Hub 编排交付。每个阶段在独立的 GitHub Copilot cloud session 中运行，
+不同 Session 不共享聊天历史或 sandbox 状态；已提交的仓库内容是唯一的阶段交接方式。
 
-- 将 `.ai-delivery/templates/` 视为只读 Markdown 结构契约。创建或重写
-  人类可读制品前，读取对应的 `*.template.md`，保留必需章节和顺序，用当前 Delivery
-  内容替换说明与示例，并在提交前删除未使用的占位内容。模板不是权威 Delivery 制品，
-  阶段 Agent 不得修改模板。
-- 即使仓库安装了参考模板，项目 Constitution 和已批准 technical baseline 仍由平台
-  管理。机器投影和 runtime contract 使用对应 JSON Schema，不使用 Markdown 模板。
-- 所有人类可读 Markdown 制品均使用简体中文。代码、命令、文件路径、标识符、JSON key、
-  protocol 名称、专有名词和引用的源文本按其要求保留原文。编排 JSON 面向机器，不得重复
-  Markdown 内容。
-- 严格保持阶段职责。Intent 负责业务问题、原因、期望结果、受影响用户与系统、客户明确
-  能力、范围、约束、优先级、依赖、风险和开放业务问题。Specification 负责 User Story、
-  FR/NFR、产品行为、领域规则、成功标准、验收标准和验收证据，不得包含架构或实现细节。
-  Technical Solution 负责所有实现选择，不得改变已批准产品行为。
-- Specification 的“完整”只表示已批准业务意图范围内的产品行为闭合，不表示必须为
-  性能、可靠性、安全、隐私、可访问性、合规或其他质量维度新增目标。每个
-  US/FR/NFR/SC/AC/IQA 必须具有可核验的权威来源：原始请求支持的已批准 INT、该 INT
-  为消除行为断点所必需的最小闭合、直接规定用户可见行为的准确 Constitution 条款，
-  或已接受的 PQ 答案。笼统的“符合 Constitution”、行业惯例、最佳实践、模板章节或
-  测试便利性不是产品要求来源。
-- 缺少某个质量维度不自动构成产品歧义。只有已批准输入已经要求该维度、但存在多个会
-  实质改变产品契约的合理解释时，Specification 才能提出 PQ。可选增强、新质量目标、
-  数值阈值、正式标准等级、测试工具、人工测试方法和额外门禁不得通过默认值或 PQ 引入。
-  可验证不等于必须数字化；只有权威来源要求数值边界时才创建数值指标。
-- 每个阶段都必须通过自身质量门禁。Intent 没有前置制品，因此只检查自身。
-  Specification、Technical Solution 和 Task Planning 在流程继续前，必须同时完成
-  自检和与已批准直接前置制品的一致性检查。
-- 阶段门禁发现不一致时，默认修复当前阶段，因为前置制品已经人工批准。只有已批准前置
-  制品本身存在重大歧义、矛盾、不可实现义务、不安全行为或治理冲突时，才能返回上游。
-  实现偏好、便利性或替代设计绝不是上游例外。
-- Intent 和 Specification 门禁必须先检查权威来源和未经批准的产品范围扩展，再检查
-  批准范围内的完整性。未被权威来源触发的产品质量维度可以明确记录为“当前没有获批准
-  的额外要求”，不得因此判定 Intent 或 Specification 不完整。Technical Solution 和
-  Task Planning 继续按各自已批准直接前置制品及阶段特定契约检查，不套用产品来源类型。
-- 默认技术流程依次为 Technical Solution、自身阶段门禁、Task Planning、自身阶段门禁，
-  然后进入 Portal 技术审批。Coding 后执行独立 Convergence，对照已批准制品检查实现。
-  默认流程不再执行最终跨制品 Analyze。
-- 阶段工作开始前读取项目级 `.ai-delivery/constitution.md`。Technical Solution、
-  Task Planning、Coding 及后续阶段还必须读取 active Feature 的
-  `technical-baseline.md`。Intent、Specification 及其阶段检查在技术基线选择前
-  运行，因此此时缺少 `technical-baseline.md` 属于正常情况，绝不能作为 Intent
-  或 Specification 阻塞项。只有当前阶段必需的治理文件缺失，或其他制品与已批准治理
-  冲突时，才能停止并报告阻塞。
-- Constitution 和 technical baseline 决策优先于阶段提示和生成计划。Agent 可以报告
-  冲突，但不得静默削弱、替换或重新解释已批准治理。
-- 修改前读取当前阶段制品。
-- 只能在所选 custom agent 的职责范围内工作。
-- 在阶段制品中记录假设、未解决问题和证据。
-- 不得虚构审批、测试结果、外部服务行为或凭据。
-- 不得在源代码、日志、测试、fixture 或生成文档中写入 secret。
-- 测试必须证明用户可见行为。Unit test、mock、health check、build 成功和页面加载
-  smoke test 只能作为辅助证据，不能替代必需的 functional、integration 或
-  end-to-end 场景。
-- 已批准行为依赖外部系统时，必须通过已批准身份和 integration 环境规划并实现真实环境
-  测试。不得假设 technical baseline 中不存在的 provider，也不得在 integration
-  不可用时将离线替代结果视为通过。
-- `.github/workflows/` 下的文件归 AIDelivery Hub 所有。Agent 绝不能创建、修改、
-  重命名或删除这些文件。
-- Production candidate 必须包含 Dockerfile 和 active iteration 目录下的
-  `runtime/deployment.json`。部署 image、candidate SHA 和 QA target 必须指向同一
-  不可变 Candidate。
-- 平台 Runner 提供稳定的公共工具。Candidate 必须在 `developerSetupCommands` 中声明
-  幂等的项目特有 runtime 准备步骤。`developerValidationCommands` 必须是唯一分类
-  对象，准确包含 `staticAnalysis`、`build`、`developerTests` 三个必选类别；
-  `integrationTests`、`functionalTests` 仅在候选明确声明时适用，不从上游自然语言
-  推断或要求，不允许其他类别或旧扁平数组。每个出现的类别是非空字符串数组，
-  仅去除首尾 ASCII 空格、Tab、CR、LF 后非空且在类别内区分大小写唯一。
-  no-op 检查再至多去一个末尾分号并 trim，仅拒绝精确 `true`、`:`、
-  `exit` 加空格/Tab 再加 `0`，或准确 `echo`/`printf` 的简单输出形态：命令名后
-  只能以空格/Tab 分隔参数，剩余文本不含 CR、LF、`;`、`&`、`|`、`<`、`>`、
-  `(`、`)`、`$`、反引号、反斜杠，引号不豁免。不作广义关键词、工具白名单或
-  shell 语义推断。完整声明通过后才可 setup，再按上述类别顺序执行；保留每个原始
-  字符串边界和真实 stdout/stderr、退出码，首次失败停止并禁止部署。
-  CI 在测试前安装已声明依赖和工具；不得依赖预热 cache，也不得在检查失败后
-  临时安装未声明 package。分类检查不替代既有部署后功能脚本或其他门禁。
-- Coding 和 Convergence 位于平台 CI、image publication、远程部署、Independent QA、
-  UAT、发布审批、review 和 merge 之前。Agent 必须准备并验证这些下游门禁所需输入，
-  但不得因为未来才会产生的 SHA、digest、target、QA、审批或 merge 证据不存在而阻塞
-  早期阶段。
-- 除非已批准 Intent 和 Specification 明确改变行为，否则必须保留现有行为。
-- 完成前执行仓库文档规定的验证命令。
-- 绝不能 merge pull request。将变更和证据留给独立 Review 与 GitHub Actions 验证。
+## 提示是本次任务的权威来源
+
+每次 Session 的提示由 Hub 生成，包含：模式（Mode）、`nodeRunId`、当前活动 Feature 目录、
+带来源标注的输入反馈、本阶段事实、"Hub 检查清单"、（部分阶段）平台运行环境画像，以及结果文件契约。
+
+- 严格按提示给出的模式工作；路径、标识和取值以提示原文为准，不得猜测或改写。
+- "Hub 检查清单"中的每一项都会被逐项校验，未通过的项会原样反馈给你修订。
+- "平台运行环境画像"描述候选验证和 Independent QA 的真实运行环境，是部署与测试设计的依据。
+- 结束前按提示中的"结果文件契约"提交结果文件；它是 Hub 判断本次结果的唯一依据。
+
+## 写入边界
+
+- 只能写入本阶段 profile 和提示允许的路径；交付制品只写入当前活动 Feature 目录，
+  不得修改其他 Feature 目录。
+- 不得修改平台路径：`.github/**`、`.ai-delivery/templates/**`、`.ai-delivery/constitution.md`、
+  `.ai-delivery/context.json`、`AGENTS.md`、`CLAUDE.md`、`.copilot/**`、`.claude/**`。
+- 创建或重写 Markdown 制品前，读取 `.ai-delivery/templates/` 中的对应模板：恰好一个 H1，
+  按顺序保留模板的全部 H2/H3 标题，删除 HTML 注释说明并替换全部占位内容。
+- 人类可读制品使用简体中文；代码、命令、路径、标识符、JSON key 和专有名词保留原文。
+- 不得合并 pull request、审批、部署或伪造任何下游证据。
+
+## 决策权
+
+- 只有来源为人工的反馈（人工审批意见、人工澄清答案、人工编辑）可以作为业务或产品决定的依据。
+  门禁、确定性检查、其他阶段和平台的反馈只说明需要修复的问题，不代表任何人已经做出决定。
+- 业务或产品问题一律以未回答状态写入结果文件的 `decisionsNeeded`。不得自行回答、替人选择
+  推荐项、把问题标记为已解决，或用默认值掩盖会实质改变范围或行为的问题。
+- 已批准的前置制品具有权威性。发现不一致时默认修复当前阶段；只有前置制品本身存在重大歧义、
+  矛盾、不可实现、不安全或治理冲突时，才能提出回退上游，且须经人工确认后执行。
+  实现偏好、便利性或替代设计不是回退理由。
+
+## 测试素材与验证口径
+
+- 合成测试素材（TTS 生成的语音、构造的数据、生成的图片和文件）允许使用，并且应优先使用；
+  它们与代码一起提交到 design 声明的测试路径下。
+- "真实验证"指使用真实的被集成服务和真实的部署环境，不要求输入数据来自真人。
+- "可验证"指能给出明确的通过或失败判定，不要求数值化；只有权威来源要求数值边界时才设定数值指标。
+- 只有凭据、云环境、真实业务数据，或 spec 明确要求由人提供的素材，才使用 `needs_input`。
+- 不得伪造外部资源、凭据、部署地址、测试结果或下游证据；不得在代码、日志、测试或文档中写入 secret。
+- Mock、build 成功、health check 和页面加载只能作为辅助证据，不能替代 functional 或 integration 证据。
+
+## 受阻时
+
+- 先完成所有不受阻、依赖已就绪的工作，再在结果文件中如实用 `needs_input` 或 `needs_decision`
+  说明受阻部分；不要停在第一个受阻项上，也不要以无产出的状态结束。
+- 下游平台证据（候选验证、镜像发布、部署、Independent QA、UAT、审批、合并）在早期阶段尚不存在，
+  这是正常情况，不构成阻塞。

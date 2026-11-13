@@ -1,43 +1,41 @@
-# GitHub-native 交付制品
+# AI Delivery 交付制品
 
-每个 SDLC 阶段均在新的 GitHub Copilot cloud session 和 sandbox 中运行。不同阶段
-不共享聊天历史；Git 是唯一的制品交接方式和审计记录。
+本目录由 AIDelivery Hub 管理。每个阶段在独立的 GitHub Copilot cloud session 中运行，
+不同 Session 不共享聊天历史；已提交的仓库内容是唯一的交接方式和审计记录。
+阶段的启动、门禁、人工审批、候选验证、Independent QA 和合并均由 Hub 编排。
 
-项目级文件：
+## 项目级文件（平台维护，Agent 只读）
 
 - `constitution.md`：已批准的项目原则和不可协商规则。
-- `context.json`：由平台维护、指向 active Feature 目录的指针。
-- `templates/`：为新项目安装的只读 Markdown 结构契约。
+- `context.json`：指向当前活动 Feature 目录（`activeFeatureDirectory`）。
+- `templates/`：Markdown 制品的结构模板，见 `templates/README.md`。
 
-每个 Feature 使用 `features/<NNN>-<feature>/` 目录：
+## Feature 目录 `features/{NNN}-{repository}/`
 
-- `intent.md`：业务问题、原因、期望结果、受影响用户与系统、范围、约束和开放问题。
-- `spec.md`：已批准 Intent 范围内的 User Story、FR、按权威来源触发的 NFR、完整产品
-  行为闭合、成功标准、验收标准、场景、按需产品澄清和测试策略。
-- `technical-baseline.md`：当前 Feature 已批准的技术约束。
-- `design.md`：架构、interface、数据、安全、运维和实施方案。
-- `tasks-implementation.md`：按依赖排序的生产实现、开发者测试、部署与可测试性准备。
-- `tasks-qa.md`：Candidate 部署后由 Independent QA Agent 独立生成并锁定的 QA 执行计划。
-- `reports/implementation.md`：跨 Coding Session 追加且不可覆盖的累计实现证据，以及延后的下游检查。
-- `reports/convergence.md`：实现后的 Convergence 证据。
-- `runtime/deployment.json`：Candidate 部署和验证契约。
-- `runtime/developer-functional-run.sh`：由开发阶段维护的 functional validation。
-- `runtime/qa-run.sh`：Independent QA 计划，只保留在专用 QA branch。
-- `.state/*.json`：平台和 Agent 的机器投影，绝不是产品意图来源。
+当前活动 Feature 目录是唯一可写的交付制品目录；其他 Feature 目录不可修改。
 
-当前唯一支持的流程为 WorkflowVersion 20。Specification 会在 Stage Gate 前集中澄清
-最多五个高影响 `PQ-###` 产品问题；低影响细节继续使用明确记录的合理默认。Coding
-实施报告采用追加式证据契约，平台执行 Base Commit 前缀校验，阻止后续 Coding 批次
-覆盖历史证据。
+- `request.json`：原始请求，不可修改。
+- `intent.md`：业务问题、期望结果、受影响用户与系统、范围、约束和开放业务问题。
+- `spec.md`：User Story、功能需求、按权威来源触发的质量要求、验收场景（`IQA-###`）和测试策略。
+- `technical-baseline-proposal.json`：技术基线候选方案（Agent 产出）。
+- `technical-baseline.md`：已批准的技术基线（Hub 生成）。
+- `design.md`：架构、interface、数据、安全、运维和实施方案，以及 Coding 可写路径清单。
+- `tasks-implementation.md`：按依赖排序的实现任务；Convergence 修复任务以 `## Convergence Phase N` 追加。
+- `tasks-qa.md`：Independent QA 计划。QA 分支从每个候选 SHA 新切出，QA 计划和证据只保存在
+  QA 分支，上线前由 Hub 一次性集成到交付分支。
+- `reports/implementation.md`：只追加的 Coding 证据账本，每个 Session 一段。
+- `reports/convergence.md`：Coding 后的 Convergence 评审报告。
+- `runtime/deployment.json`：Candidate 部署与验证契约。
+- `runtime/developer-functional-run.sh`：部署后由平台执行的开发者 functional 验证。
+- `runtime/qa-run.sh`、`runtime/qa-result.json`：Independent QA 脚本与结果，同样只保存在 QA 分支。
+- `bugfixes/{BUG-ID}/`：正式 QA 缺陷的 `assessment.md`、`fix.md`、`test.md`。
+- `.state/results/{nodeRunId}.json`：每个 Agent Session（含门禁）提交的结构化结果文件。
 
-创建或重写 Markdown 制品前，责任 Agent 必须读取对应的
-`.ai-delivery/templates/*.template.md`，保留必需章节和顺序，用当前 Delivery 内容
-替换模板说明，并删除未使用的占位内容。模板不会复制到 Feature 目录，也不能替代已批准
-制品。
+门禁不产出 Markdown 报告，评审结论只记录在结果文件中。
 
-每次只运行一个阶段。选择对应 custom agent，以当前 Delivery branch 为目标，审阅其
-pull request，并在启动下一阶段前合并已批准制品。GitHub Actions 在干净 Runner 中验证
-Candidate。失败必须返回责任阶段；只有已批准输入发生变化时，才重新生成下游制品。
+## 规则
 
-Custom agent profile 必须先存在于仓库 default branch，才会出现在 GitHub Agents
-选择器中。应用工作始终隔离在 Delivery branch。
+- 结构模板是只读参考，不复制到 Feature 目录，也不替代已批准制品。
+- `.github/**`、`.ai-delivery/templates/**`、`constitution.md`、`context.json` 由平台维护，
+  Agent 不得修改。
+- 业务和产品决定只能由人作出；Agent 提出的问题经 Hub 交给对应负责人回答。
