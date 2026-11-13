@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0060",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已复核三个已批准 IQA 场景的 Independent QA 计划与真实依赖黑盒执行脚本，并完成结构及语法自检。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0060.json"
+    }
+  ]
+}
