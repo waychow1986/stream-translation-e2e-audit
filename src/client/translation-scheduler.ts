@@ -14,8 +14,10 @@ export class TranslationScheduler {
   private readonly submit: (text: string) => void;
   private readonly clock: Clock;
   private latest = "";
-  private timer: number | null = null;
-  private lastSubmittedAt = 0;
+  private lastSubmitted = "";
+  private stableSnapshot = "";
+  private silenceTimer: number | null = null;
+  private continuousTimer: number | null = null;
 
   constructor(submit: (text: string) => void, clock: Clock = systemClock) {
     this.submit = submit;
@@ -27,26 +29,44 @@ export class TranslationScheduler {
       this.dispose();
       return;
     }
+    if (text === this.latest) return;
     this.latest = text;
-    if (this.clock.now() - this.lastSubmittedAt >= 2000) {
-      this.flush();
-      return;
+    if (this.continuousTimer === null) {
+      this.continuousTimer = this.clock.setTimeout(() => this.flush(this.latest), 2000);
     }
-    if (this.timer !== null) this.clock.clearTimeout(this.timer);
-    this.timer = this.clock.setTimeout(() => this.flush(), 400);
+    const stableSnapshot = completeTokenSnapshot(text);
+    if (!stableSnapshot || stableSnapshot === this.lastSubmitted || stableSnapshot === this.stableSnapshot) return;
+    this.stableSnapshot = stableSnapshot;
+    if (this.silenceTimer !== null) this.clock.clearTimeout(this.silenceTimer);
+    this.silenceTimer = this.clock.setTimeout(() => this.flush(this.stableSnapshot), 400);
   }
 
-  flush(): void {
-    if (!this.latest) return;
-    if (this.timer !== null) this.clock.clearTimeout(this.timer);
-    this.timer = null;
-    this.lastSubmittedAt = this.clock.now();
-    this.submit(this.latest);
+  flush(snapshot = this.stableSnapshot || this.latest): void {
+    if (!snapshot || snapshot === this.lastSubmitted) return;
+    this.clearTimers();
+    this.lastSubmitted = snapshot;
+    this.stableSnapshot = "";
+    this.submit(snapshot);
   }
 
   dispose(): void {
-    if (this.timer !== null) this.clock.clearTimeout(this.timer);
-    this.timer = null;
+    this.clearTimers();
     this.latest = "";
+    this.stableSnapshot = "";
   }
+
+  private clearTimers(): void {
+    if (this.silenceTimer !== null) this.clock.clearTimeout(this.silenceTimer);
+    if (this.continuousTimer !== null) this.clock.clearTimeout(this.continuousTimer);
+    this.silenceTimer = null;
+    this.continuousTimer = null;
+  }
+}
+
+function completeTokenSnapshot(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed) return "";
+  if (/[\s.!?,;:。！？；：]$/u.test(text)) return trimmed;
+  const lastBoundary = Math.max(trimmed.lastIndexOf(" "), trimmed.lastIndexOf("\t"), trimmed.lastIndexOf("\n"));
+  return lastBoundary < 0 ? "" : trimmed.slice(0, lastBoundary).trim();
 }

@@ -37,8 +37,29 @@ interface SpeechTokenResponse {
   expiresAt: string;
 }
 
+export interface SessionControllerDependencies {
+  getConfig(): Promise<BrowserConfig>;
+  getToken(): Promise<SpeechTokenResponse>;
+  createSpeechSession: typeof createSpeechSession;
+  streamTranslation: typeof streamTranslation;
+  setTimeout(callback: () => void, delay: number): number;
+  clearTimeout(timer: number): void;
+  onTerminated(): void;
+}
+
+const defaultDependencies: SessionControllerDependencies = {
+  getConfig: () => getJson<BrowserConfig>("/api/config"),
+  getToken: postToken,
+  createSpeechSession,
+  streamTranslation,
+  setTimeout: (callback, delay) => window.setTimeout(callback, delay),
+  clearTimeout: (timer) => window.clearTimeout(timer),
+  onTerminated: () => undefined
+};
+
 export class SessionController {
   private readonly dispatch: CaptionDispatch;
+  private readonly dependencies: SessionControllerDependencies;
   private readonly resources = new SessionResources();
   private speech: SpeechSession | null = null;
   private segmentNumber = 0;
@@ -46,18 +67,27 @@ export class SessionController {
   private segmentId = "";
   private scheduler: TranslationScheduler | null = null;
   private translationAbort: AbortController | null = null;
+  private recognitionQueue = Promise.resolve();
+  private active = false;
+  private terminated = false;
 
-  constructor(dispatch: CaptionDispatch) {
+  constructor(dispatch: CaptionDispatch, dependencies: Partial<SessionControllerDependencies> = {}) {
     this.dispatch = dispatch;
+    this.dependencies = { ...defaultDependencies, ...dependencies };
   }
 
   async start(): Promise<void> {
-    const config = await getJson<BrowserConfig>("/api/config");
-    const token = await postToken();
-    this.speech = createSpeechSession(config.speechEndpoint, token.authorizationToken, {
-      onRecognition: (result) => void this.onRecognition(result),
+    const config = await this.dependencies.getConfig();
+    const token = await this.dependencies.getToken();
+    this.active = true;
+    this.speech = this.dependencies.createSpeechSession(config.speechEndpoint, token.authorizationToken, {
+      onRecognition: (result) => {
+        this.recognitionQueue = this.recognitionQueue
+          .then(() => (this.active ? this.onRecognition(result) : undefined))
+          .catch(() => this.terminate());
+      },
       onNoMatch: () => undefined,
-      onError: () => void this.stop()
+      onError: () => void this.terminate()
     });
     this.resources.add(() => this.translationAbort?.abort());
     this.resources.add(() => this.scheduler?.dispose());
@@ -67,8 +97,16 @@ export class SessionController {
   }
 
   async stop(): Promise<void> {
+    await this.terminate();
+  }
+
+  private async terminate(): Promise<void> {
+    if (this.terminated) return;
+    this.terminated = true;
+    this.active = false;
     await this.resources.dispose();
     this.dispatch({ type: "clearCurrent" });
+    this.dependencies.onTerminated();
   }
 
   private async onRecognition(result: SpeechRecognition): Promise<void> {
@@ -105,7 +143,7 @@ export class SessionController {
 
   private async translate(text: string, final: boolean): Promise<void> {
     if (text.length > 4000) {
-      this.dispatch({ type: "clearCurrent" });
+      await this.terminate();
       return;
     }
     this.translationAbort?.abort();
@@ -113,40 +151,45 @@ export class SessionController {
     this.translationAbort = abort;
     const requestId = crypto.randomUUID();
     const revision = this.revision;
-    this.dispatch({ type: "translationStarted", segmentId: this.segmentId, revision, requestId, final, sourceText: text });
+    const segmentId = this.segmentId;
+    this.dispatch({ type: "translationStarted", segmentId, revision, requestId, final, sourceText: text });
     let first = true;
+    let completed = false;
+    let failed = false;
     try {
-      await streamTranslation(
-        { segmentId: this.segmentId, revision, mode: final ? "final" : "draft", sourceLanguage: "en-US", text },
+      await this.dependencies.streamTranslation(
+        { segmentId, revision, mode: final ? "final" : "draft", sourceLanguage: "en-US", text },
         abort.signal,
         (event: TranslationEvent) => {
           if (event.type === "delta") {
-            this.dispatch({ type: "translationDelta", segmentId: this.segmentId, revision, requestId, text: event.text, first });
+            this.dispatch({ type: "translationDelta", segmentId, revision, requestId, text: event.text, first });
             first = false;
           } else if (event.type === "completed" && final) {
-            this.dispatch({ type: "translationCompleted", segmentId: this.segmentId, revision, requestId });
-            this.resetSegment();
+            this.dispatch({ type: "translationCompleted", segmentId, revision, requestId });
+            completed = true;
+            if (this.segmentId === segmentId) this.resetSegment();
           } else if (event.type === "error" && event.code !== "CANCELLED") {
-            this.dispatch({ type: "clearCurrent" });
+            failed = true;
           }
         }
       );
+      if (failed || (final && !completed)) await this.terminate();
     } catch (error) {
-      if (!abort.signal.aborted) this.dispatch({ type: "clearCurrent" });
+      if (!abort.signal.aborted) await this.terminate();
     }
   }
 
   private scheduleTokenRefresh(token: SpeechTokenResponse): void {
-    const timer = window.setTimeout(async () => {
+    const timer = this.dependencies.setTimeout(async () => {
       try {
-        const refreshed = await postToken();
+        const refreshed = await this.dependencies.getToken();
         this.speech?.updateAuthorizationToken(refreshed.authorizationToken);
         this.scheduleTokenRefresh(refreshed);
       } catch {
-        await this.stop();
+        await this.terminate();
       }
     }, tokenRefreshDelay(Date.parse(token.expiresAt)));
-    this.resources.add(() => window.clearTimeout(timer));
+    this.resources.add(() => this.dependencies.clearTimeout(timer));
   }
 
   private resetSegment(): void {
