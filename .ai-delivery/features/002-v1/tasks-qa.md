@@ -3,7 +3,7 @@
 ## 执行边界
 
 - 执行前在五分钟内重试 DNS、连接、TLS（如适用）、`QA_HEALTH_PATH` 健康检查与 `/candidate-identity` 不可变身份校验；任何前置失败均作为环境阻塞，不执行验收场景。
-- 使用 Azure Speech 合成两段含义明确的英语语音并拼接受控静音区间。Playwright 启动 Chromium 时自行配置 HTTP 安全来源、麦克风权限、fake media 和合成 WAV 注入，不要求产品提供测试接口。
+- 使用 QA 托管身份取得 Azure Speech bearer token，通过 `${AZURE_SPEECH_ENDPOINT%/}/tts/cognitiveservices/v1` 合成两段含义明确的英语语音并拼接受控静音区间。Playwright 启动 Chromium 时自行配置 HTTP 安全来源、麦克风权限、fake media 和合成 WAV 注入，不要求产品提供测试接口。
 - 通过浏览器控制台、失败请求、WebSocket 收发消息、音频帧进度、页面状态、字幕 DOM 与 `dependency.evidence` 设置采集、请求、依赖返回和结果呈现检查点。
 - 本次提示未提供正式 Bugfix 复测 ID，因此结果中的 `bugfixResults` 为空数组。
 

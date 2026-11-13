@@ -119,7 +119,7 @@ cat > "$work_dir/second.ssml" <<'EOF'
 <speak version="1.0" xml:lang="en-US"><voice name="en-US-JennyNeural">We will discuss the project.</voice></speak>
 EOF
 
-tts_url="${AZURE_SPEECH_ENDPOINT%/}/cognitiveservices/v1"
+tts_url="${AZURE_SPEECH_ENDPOINT%/}/tts/cognitiveservices/v1"
 synthesize() {
   local ssml_path="$1"
   local wav_path="$2"
