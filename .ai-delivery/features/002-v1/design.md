@@ -53,13 +53,9 @@ V1 是单容器 Web App：浏览器采集英语会议语音，服务端使用 Az
 
 Coding 获准创建或修改的仓库根路径仅限以下项目符号列出的路径：
 
-- `package.json`
-- `package-lock.json`
 - `tsconfig.json`
 - `vite.config.ts`
 - `playwright.config.ts`
-- `./Dockerfile`
-- `./.dockerignore`
 - `./.gitignore`
 - `src/`
 - `tests/`
@@ -67,6 +63,8 @@ Coding 获准创建或修改的仓库根路径仅限以下项目符号列出的�
 `src/client/` 包含 React 页面、AudioWorklet、WebSocket client、字幕 reducer 与样式；`src/server/` 包含 Fastify 启动、健康/身份路由、WebSocket session、Speech/Foundry adapters 与配置校验；`src/shared/` 包含协议 schema 和共享类型。`tests/unit/` 验证状态机与排序，`tests/contract/` 验证 adapters 和协议，`tests/e2e/` 放置本地 Playwright 场景，`tests/fixtures/audio/iqa-en-multisegment.wav` 保存可重复的合成英语音频，`tests/fixtures/audio/iqa-en-multisegment.json` 保存片段时间、英文原意及可自动判定的中文概念词组。
 
 构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。所需音频和语义清单固定来自 `tests/fixtures/audio/`。
+
+根目录 `Dockerfile`、`.dockerignore`、包管理文件以及 `.ai-delivery/features/002-v1/runtime/deployment.json`、`.ai-delivery/features/002-v1/runtime/developer-functional-run.sh` 由平台另行固定授权 Coding，不属于上述代码路径清单；`.ai-delivery/features/002-v1/runtime/qa-run.sh` 由 Independent QA 独立编写，Coding 不创建、预置或嵌入其内容。
 
 ## 数据流、状态、并发与生命周期
 
@@ -136,14 +134,14 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 | adapter 与协议 contract | Coding 与 Candidate checks | 本地进程、记录式 fake adapter | 无真实服务、无凭据 | Speech/Foundry 参数、协议 schema、错误/取消映射测试 | CI 对不可变提交重跑；不构成真实集成证据 |
 | 本地 Playwright 功能流 | Coding 与 Candidate checks | Chromium、合成 WAV、进程内确定性 adapter | Playwright；无 Azure 凭据 | 较早字幕在后续音频期间可见、顺序及失败判定记录 | CI 重跑；仅证明应用编排，不构成 IQA 通过 |
 | 镜像与候选身份 | 候选验证 Delivery validation | ACR、AKS、LoadBalancer | 平台 OIDC/Workload Identity，以及含 `AZURE_SPEECH_RESOURCE_ID` 的注入变量 | Dockerfile、health/identity contract test；配置 contract 验证缺少/畸形 resource ID 时启动失败 | 镜像构建、非 root、部署、health、candidate identity 与 Speech ARM ID 注入结果 |
-| IQA-001～IQA-003 真实完整流程 | Independent QA | 候选 AKS 公网地址、真实 Azure Speech/Foundry | 平台预装锁定 npm 依赖及 Chromium、QA OIDC、Speech/Foundry 环境变量、内嵌且与仓库 fixture 同 hash 的合成英语音频 | `qa-run.sh`、Playwright 黑盒断言、fixture/内嵌数据一致性 contract test、结果 JSON schema test | 发言期间字幕进展、自动检测英语、中文概念词组顺序及同一 segment 的 Azure Speech result ID/Foundry request ID |
+| IQA-001～IQA-003 真实完整流程 | Independent QA | 候选 AKS 公网地址、真实 Azure Speech/Foundry | 平台预装锁定 npm 依赖及 Chromium、QA OIDC、Speech/Foundry 环境变量；QA 自行内嵌或合成英语音频 | Coding 仅提供已实现的浏览器流程、公开协议和非敏感依赖关联字段；不编写、预置或测试 `qa-run.sh` 内容 | QA 独立编写并运行 `qa-run.sh`，产出发言期间字幕进展、自动检测英语、中文语义顺序及同一 segment 的真实依赖关联证据 |
 | 发布回归 | release verification | 已批准候选镜像和目标运行环境 | 目标环境 Workload Identity | 已通过候选与 Independent QA 的不可变 SHA | 发布后 health/identity 及必要完整流程结果；不替代前述 IQA |
 
-Independent QA 的 `runtime/qa-run.sh` 不调用 TTS，也不依赖仓库 checkout 路径。Coding 将 `tests/fixtures/audio/iqa-en-multisegment.wav` 的 PCM payload 和 `iqa-en-multisegment.json` 的语义清单以 base64 常量及 SHA-256 同步嵌入脚本；contract test 必须证明脚本常量解码 hash 与仓库 fixture/manifest 完全一致。脚本在空临时目录中以 Node.js 内存解码，将 PCM 通过 Playwright init script 的 Web Audio `MediaStreamDestination` 作为 `getUserMedia` 测试输入，不落盘；唯一写入是 `QA_RESULT_PATH`。平台在执行脚本前已从根 `package-lock.json` 运行 `npm ci --ignore-scripts` 并安装 Chromium到 `PLAYWRIGHT_BROWSERS_PATH`；脚本先用 `node -e "require.resolve('@playwright/test')"` 和 Playwright `chromium.executablePath()` 验证运行时，缺失即记录 test gap 并失败，不联网安装、不依赖 cache。
+Independent QA 独立编写 `.ai-delivery/features/002-v1/runtime/qa-run.sh`，并自行内嵌或通过平台提供的 Azure CLI、OIDC 与 Speech 环境变量合成含多个可区分语义片段的英语音频；该脚本不依赖仓库源码或 Coding fixture。Coding 不负责脚本内容、测试素材常量、素材一致性测试或 QA 结果 schema 测试。QA 可使用平台提供的 `QA_BASE_URL`、health path、候选与计划标识、`QA_RESULT_PATH`、Playwright/Chromium、Azure 身份及 Speech/Foundry 配置，在空临时工作目录中执行黑盒验证，除 `QA_RESULT_PATH` 外不写文件。
 
-音频按顺序表达 “The red lamp is on.” 和 “The train arrives at seven.”，manifest 记录第二片段开始播放时刻及两个有序中文概念组：第一组必须同时出现“红”和“灯”，第二组必须出现“火车”或“列车”以及“七”或“7”。IQA-001 在第二片段播放尚未结束时轮询可见字幕并要求第一组已出现，最终要求两组在合并字幕中的首次位置严格递增；IQA-002 要求页面不存在语言选择交互、收到 `detectedLanguage` 主标签 `en` 且所有 final 字幕含至少一个汉字；IQA-003 要求同一次 session 的每个通过语义检查的 segment 都收到非 `test-double:` 的 `speechResultId` 与 `modelRequestId`，并与字幕 `segmentId` 一一对应。二者分别直接取自 Speech SDK recognition result metadata 与 Foundry HTTP response header，不接受应用仅自报服务名称、Mock 标志、页面加载或 health 作为依赖证据。Playwright trace、带音频播放时间/字幕快照/ID 的内存事件摘要和最终断言写入结果 JSON 的 evidence 字符串；不写正文以外的服务响应，不含 token。
+IQA-001 必须在后续语义片段仍播放时确认较早片段对应的中文字幕已可见，并确认最终字幕顺序与输入语义顺序一致；IQA-002 必须确认流程无语言手动选择、`detectedLanguage` 主标签为 `en` 且输出为中文；IQA-003 必须确认同一 session 的通过片段具有非 `test-double:` 的 `speechResultId` 与 `modelRequestId`，并与字幕 `segmentId` 一一对应。证据不得以应用自报服务名称、Mock 标志、页面加载或 health 代替真实依赖调用，也不得包含 token、音频正文以外的服务响应或其他 secret。
 
-由于候选入口按平台约束是 HTTP 公网 IP，QA Chromium 必须仅对该精确 `QA_BASE_URL` 使用 `--unsafely-treat-insecure-origin-as-secure` 以启用测试麦克风；此开关只属于候选测试，不进入应用或生产配置，正式用户入口仍须由部署环境提供浏览器认可的 HTTPS。结果严格包含平台规定字段、IQA-001～003 三个 scenario、`externalServices` 固定为 `["Azure AI Speech","Azure AI Foundry"]`、上述非敏感关联证据及 bugfixResults；`passed=true` 时全部 scenario 通过且 defects/testGaps 为空，否则至少填一个 defect 或 test gap。脚本校验 `QA_CANDIDATE_SHA`、`QA_BASE_URL`、`QA_PLAN_COMMIT_SHA`、`QA_PLAN_HASH` 并原样写入契约字段，不修改工作区或临时目录中的其他文件。
+由于候选入口按平台约束是 HTTP 公网 IP，QA 可仅对精确 `QA_BASE_URL` 使用 Chromium `--unsafely-treat-insecure-origin-as-secure` 以启用测试麦克风；此开关只属于候选测试，不进入应用或生产配置。QA 结果必须遵循平台结果契约：覆盖 IQA-001～003，记录真实外部服务与非敏感证据；`passed=true` 时全部场景通过且 defects、testGaps 为空，否则至少记录一个 defect 或 test gap，并原样回填平台提供的候选与计划标识。
 
 ## 快速验证指南（Quickstart）
 
@@ -151,7 +149,7 @@ Independent QA 的 `runtime/qa-run.sh` 不调用 TTS，也不依赖仓库 checko
 2. 依次执行静态分析、生产构建、单元、contract 与本地 Playwright 命令；任何非零结果均停止。本地 Playwright 使用 `tests/fixtures/audio/` 的多语义片段合成英语素材和确定性 adapter，断言发言尚未结束时已有较早字幕、字幕顺序不变且目标为中文。
 3. 以根目录 Dockerfile 构建镜像，检查最终 `USER` 解析为正整数 `10001`，启动容器并验证 `/healthz`；提供测试用 delivery/candidate 环境变量后验证 `/candidate-identity` 原样返回。
 4. 候选验证部署不可变镜像后，只把 health 与 identity 作为部署证据，不宣称功能验收。
-5. Independent QA 使用仓库 fixture 的内嵌同 hash 音频、真实 Speech、Foundry 和候选 URL 执行 IQA-001～003；确认第二片段结束前第一概念组已可见、两个中文概念组有序、自动检测主标签为 `en`，且同一 segment 有非测试替身的 Speech result ID 与 Foundry request ID。结果文件无 defect 或 test gap 时方可通过。
+5. Independent QA 独立准备或合成多语义片段英语音频，使用真实 Speech、Foundry 和候选 URL 执行 IQA-001～003；确认后续片段播放期间较早中文字幕已可见、中文字幕语义顺序正确、自动检测主标签为 `en`，且同一 segment 有非测试替身的 Speech result ID 与 Foundry request ID。结果文件无 defect 或 test gap 时方可通过。
 
 ## 支持 Runbook
 
