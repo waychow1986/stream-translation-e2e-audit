@@ -5,7 +5,7 @@
   "scripts": {
     "test": "vitest run --passWithNoTests",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build": "npm run build --workspace @stream-translation/web && npm run build --workspace @stream-translation/server",
+    "build": "npm run build --workspace @stream-translation/contracts && npm run build --workspace @stream-translation/web && npm run build --workspace @stream-translation/server",
     "test:list": "vitest list --passWithNoTests && playwright test --list --pass-with-no-tests --project=integration --project=functional --project=e2e"
   },
   "repository": {
