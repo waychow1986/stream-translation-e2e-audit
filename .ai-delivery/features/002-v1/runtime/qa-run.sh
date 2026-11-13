@@ -72,6 +72,11 @@ if [[ "${ready}" != true ]]; then
   exit 0
 fi
 
+if [[ -z "${AZURE_SPEECH_ENDPOINT:-}" ]]; then
+  write_environment_failure "测试素材生成前置失败：QA 环境未提供 AZURE_SPEECH_ENDPOINT。"
+  exit 0
+fi
+
 speech_token="$(az account get-access-token \
   --resource "https://cognitiveservices.azure.com/" \
   --query accessToken -o tsv 2>"${temp_dir}/token-error" || true)"
