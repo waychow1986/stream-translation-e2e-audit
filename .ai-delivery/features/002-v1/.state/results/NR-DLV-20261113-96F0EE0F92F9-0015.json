@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0015",
+  "stage": "technical-solution.gate",
+  "outcome": "repair",
+  "summary": "技术方案存在身份接入、会话生命周期、实施路径授权及真实端到端验证契约方面的审批阻塞项，需修复后复审。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0015.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "TS-FEAS-001",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "服务端 Speech 方案尚未形成在平台 Workload Identity 输入下可实施的认证契约：设计只声明以 DefaultAzureCredential、Speech endpoint 和认知服务 scope 获取令牌，未定义 Azure AI Speech SDK 接受该 Entra 令牌所需的配置、资源标识及会话内令牌续期方式；同时以“Workload Identity 不暴露给浏览器”为由改选候选 B，未证明已满足已批准技术基线中候选 A 无法通过真实浏览器验证后才能改选 B 的条件。",
+      "recommendation": "明确与平台实际注入变量匹配、可由所选 Speech SDK 执行的 Workload Identity 认证与令牌续期契约，并据此重新核对架构选择；若仍采用候选 B，须用可核验的技术约束说明候选 A 在当前 WI-only 平台为何不可实施，而不能仅以不向浏览器暴露 Azure 身份作结论。"
+    },
+    {
+      "id": "TS-CONS-002",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "停止生命周期存在直接矛盾：不变量规定“停止后不得产生新字幕”，但停止流程又要求关闭音频输入后继续等待 Speech 尾部结果和翻译队列排空，并在排空后才发送 session.stopped；实现无法据此确定收到 stop 到 session.stopped 之间是否允许 speech.final、subtitle.delta 和 subtitle.final。",
+      "recommendation": "为 stop 请求、draining 和 stopped 状态规定唯一一致的事件边界，明确各状态允许产生的结果、何时停止接收音频、何时取消或排空既有工作，并同步协议不变量和验证断言。"
+    },
+    {
+      "id": "TS-PATH-003",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "“Component 边界与项目结构”的机器可读根路径清单明确排除了后续必须生成的 runtime/deployment.json 与 runtime/qa-run.sh，因而路径清单没有覆盖本方案自身要求的部署和 Independent QA 实施制品。",
+      "recommendation": "把 Feature 下 runtime 交付制品的准确路径纳入获准实施路径清单，并保持 deployment.json、qa-run.sh 及其所需测试素材和脚本路径与部署、验证章节一致。"
+    },
+    {
+      "id": "TS-VERIFY-004",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "Playwright 执行环境未闭合：候选 clean runner 的唯一安装命令被固定为 npm ci --ignore-scripts，却未声明兼容的 Chromium 获取或系统浏览器绑定步骤；Independent QA 又要求 qa-run.sh 在空临时目录启动 Playwright，但没有规定其测试运行时和浏览器从何获得，故开发者功能测试与真实 IQA 均不能按当前契约保证可执行。",
+      "recommendation": "在 deployment 与 qa-run 契约中分别声明与平台环境相符、可重复且不依赖隐含缓存的 Playwright 运行时及浏览器准备方式，并确保所列命令在 clean runner 和 IQA 空临时目录中能够直接执行。"
+    },
+    {
+      "id": "TS-VERIFY-005",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "Independent QA 输入与判定契约不完整：qa-run.sh 被要求通过 Azure CLI/OIDC“合成或取得”英语 WAV，但方案未提供可用的 TTS 服务、配置或取得来源，也未让该流程使用已声明应随代码提交的合成音频；同时没有定义如何以明确通过或失败规则核验可变的中文字幕语义，以及如何从黑盒浏览器执行取得可关联的真实 Speech 与 Foundry 调用证据。",
+      "recommendation": "优先让 qa-run.sh 使用仓库内已声明路径的合成英语音频及语义清单，明确脚本在临时目录中的素材定位方式；为每个 IQA 场景定义可自动判定的中文语义检查和真实依赖调用关联证据来源，且不得用 Mock、页面加载或仅由应用自报的服务名称替代。"
+    }
+  ]
+}
