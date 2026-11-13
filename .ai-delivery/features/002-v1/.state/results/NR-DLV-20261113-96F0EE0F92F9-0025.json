@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0025",
+  "stage": "technical-solution",
+  "outcome": "passed",
+  "summary": "技术方案已移除 Coding 对 Independent QA 脚本及其内嵌素材的职责，并按平台固定授权收敛代码路径清单。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/design.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0025.json"
+    }
+  ]
+}

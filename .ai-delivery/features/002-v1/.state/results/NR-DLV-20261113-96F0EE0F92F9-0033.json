@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0033",
+  "stage": "convergence",
+  "outcome": "repair",
+  "summary": "当前 Candidate 存在真实 Foundry 增量被缓冲及 Playwright 完整功能证据无效两项 HIGH 阻塞问题，需返回 Coding 修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/reports/convergence.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0033.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "CONV-001",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "真实 Foundry adapter 完整缓冲模型流后才向浏览器集中发送字幕 delta，不满足持续流式翻译和发言期间可观察连续性。",
+      "recommendation": "修复 T026/T027 的增量传播契约，使真实模型 delta 到达时立即按顺序发送，并补充模型流未结束时即可观察前序 delta 的定向测试。"
+    },
+    {
+      "id": "CONV-002",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "Playwright 测试绕过合成 WAV、麦克风和 AudioWorklet，且未验证后续语音输入期间前序字幕可见或实际反向失败行为，实施报告的完整功能证据无效。",
+      "recommendation": "修复 T014、T019、T024、T025、T033，使用已提交 WAV 驱动浏览器音频流程并按输入进度断言渐进字幕，同时让反向场景实际驱动应用产生不合格结果。"
+    }
+  ]
+}

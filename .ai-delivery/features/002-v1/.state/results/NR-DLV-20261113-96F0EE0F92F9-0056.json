@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0056",
+  "stage": "bugfix.fix",
+  "outcome": "passed",
+  "summary": "BUG-001 的 Foundry API version 缺失与麦克风启动失败状态清理问题已按评估范围修复，并通过本地确定性验证。",
+  "artifacts": [
+    {
+      "path": "src/server/adapters/azure-foundry.ts"
+    },
+    {
+      "path": "src/client/translation-client.ts"
+    },
+    {
+      "path": "tests/contract/azure-foundry.contract.test.ts"
+    },
+    {
+      "path": "tests/unit/resource-cleanup.test.ts"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/bugfixes/BUG-001/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0056.json"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0010",
+  "stage": "specification",
+  "outcome": "passed",
+  "summary": "已补充 Constitution 要求的 Playwright 端到端验证约束、相关 IQA 场景及 governance 追踪关系。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/spec.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0010.json"
+    }
+  ]
+}

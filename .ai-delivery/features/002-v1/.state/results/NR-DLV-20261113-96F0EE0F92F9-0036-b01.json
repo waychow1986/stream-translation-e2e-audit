@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0036-b01",
+  "stage": "coding",
+  "outcome": "passed",
+  "summary": "已完成 WebSocket/SIGTERM 幂等资源清理与 Azure Speech 完整授权生命周期 contract 修复，全部本地必做验证通过。",
+  "artifacts": [
+    {
+      "path": "src/client/translation-client.ts"
+    },
+    {
+      "path": "src/server/adapters/azure-speech.ts"
+    },
+    {
+      "path": "src/server/app.ts"
+    },
+    {
+      "path": "src/server/translation-session.ts"
+    },
+    {
+      "path": "src/server/websocket.ts"
+    },
+    {
+      "path": "tests/contract/azure-speech.contract.test.ts"
+    },
+    {
+      "path": "tests/contract/shutdown.contract.test.ts"
+    },
+    {
+      "path": "tests/unit/resource-cleanup.test.ts"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/reports/implementation.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0036-b01.json"
+    }
+  ],
+  "progress": {
+    "completedTaskIds": [],
+    "blockedTaskIds": []
+  },
+  "inputsNeeded": [],
+  "decisionsNeeded": []
+}

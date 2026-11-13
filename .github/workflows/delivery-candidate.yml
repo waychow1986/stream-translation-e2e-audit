@@ -1,14 +1,11 @@
 name: Delivery candidate
+run-name: candidate ${{ inputs.correlation_id }}
 
 on:
   workflow_dispatch:
     inputs:
       delivery_id:
         description: AIDelivery Hub delivery identifier
-        required: true
-        type: string
-      attempt:
-        description: Candidate repair attempt
         required: true
         type: string
       candidate_sha:
@@ -19,9 +16,21 @@ on:
         description: Selected Independent QA AKS resource ID
         required: true
         type: string
+      correlation_id:
+        description: AIDelivery Hub node run correlation identifier
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+# Inputs reach shell scripts only through environment variables, never through
+# expression interpolation inside run scripts.
+env:
+  DELIVERY_ID: ${{ inputs.delivery_id }}
+  CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  AKS_RESOURCE_ID: ${{ inputs.aks_resource_id }}
+  CORRELATION_ID: ${{ inputs.correlation_id }}
 
 jobs:
   checks:
@@ -51,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test -f Dockerfile
           deployment="$ARTIFACT_ROOT/runtime/deployment.json"
           test -f "$deployment"
@@ -138,7 +147,7 @@ jobs:
           test -f "$functional_script"
           bash -n "$functional_script"
           if jq -e '.requiresPrivateNetwork' "$deployment" >/dev/null; then
-            echo "Candidate checks require a dedicated private-network runner." >&2
+            echo "::error::requiresPrivateNetwork must be false: Candidate checks run on a GitHub-hosted runner without private network access. Declare setup and validation commands that run with runner-local dependencies." >&2
             exit 1
           fi
 
@@ -197,6 +206,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # A test command that exits 0 but reports that no tests ran is a failure.
+          reports_zero_tests() {
+            local output_file="$1"
+            if grep -Eqi \
+              'no tests? (were )?found|no test files found|no tests ran|no tests to run|no test is available|^# tests 0$' \
+              "$output_file"; then
+              return 0
+            fi
+            if grep -Eqi '(^|[^0-9])0 (tests? )?(passed|passing)' "$output_file" &&
+              ! grep -Eqi '(^|[^0-9])[1-9][0-9]* (tests? )?(passed|passing)' "$output_file"; then
+              return 0
+            fi
+            return 1
+          }
           jq -r '.developerValidationCommands as $commands |
             ["staticAnalysis", "build", "developerTests", "integrationTests", "functionalTests"][] as $category |
             ($commands[$category] // [] | to_entries[]) |
@@ -205,12 +228,28 @@ jobs:
             while IFS=$'\t' read -r category index encoded; do
               encoded="${encoded%$'\r'}"
               command_file="$(mktemp "$RUNNER_TEMP/candidate-validation.XXXXXX")"
-              trap 'status=$?; rm -f -- "$command_file"; exit "$status"' EXIT
+              output_file="$(mktemp "$RUNNER_TEMP/candidate-validation-output.XXXXXX")"
+              error_file="$(mktemp "$RUNNER_TEMP/candidate-validation-error.XXXXXX")"
+              trap 'status=$?; rm -f -- "$command_file" "$output_file" "$error_file"; exit "$status"' EXIT
               printf '%s' "$encoded" | base64 --decode > "$command_file"
-              if bash -euo pipefail "$command_file" < /dev/null; then status=0; else status=$?; fi
+              # Capture both streams separately so they are replayed unmixed (stdout and stderr stay distinct).
+              set +e
+              bash -euo pipefail "$command_file" < /dev/null > "$output_file" 2> "$error_file"
+              status=$?
+              set -e
+              cat -- "$output_file"
+              cat -- "$error_file" >&2
               printf '%s[%s] exit %s\n' "$category" "$index" "$status"
               if (( status != 0 )); then exit "$status"; fi
-              rm -f -- "$command_file"
+              case "$category" in
+                developerTests | integrationTests | functionalTests)
+                  if reports_zero_tests "$output_file" || reports_zero_tests "$error_file"; then
+                    echo "::error::$category[$index] exited 0 but reported that no tests were run." >&2
+                    exit 1
+                  fi
+                  ;;
+              esac
+              rm -f -- "$command_file" "$output_file" "$error_file"
               trap - EXIT
             done
 
@@ -221,6 +260,18 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      HUB_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      HUB_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      HUB_CONTAINER_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+      HUB_FOUNDRY_RESOURCE_ID: ${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}
+      HUB_SPEECH_ENDPOINT: ${{ vars.AZURE_SPEECH_ENDPOINT }}
+      HUB_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
+      HUB_AI_MODEL_DEPLOYMENT: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}
+      HUB_POSTGRES_SERVER: ${{ vars.AZURE_POSTGRES_SERVER }}
+      HUB_POSTGRES_HOST: ${{ vars.AZURE_POSTGRES_HOST }}
+      HUB_POSTGRES_ADMIN_USER: ${{ vars.AZURE_POSTGRES_ADMIN_USER }}
+      HUB_POSTGRES_VERSION: ${{ vars.AZURE_POSTGRES_VERSION }}
     steps:
       - name: Check out immutable candidate
         uses: actions/checkout@v4
@@ -241,11 +292,41 @@ jobs:
           test -d "$root"
           echo "ARTIFACT_ROOT=$root" >> "$GITHUB_ENV"
 
+      - name: Derive Delivery resource names
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Must stay identical to the Hub's TestEnvironmentNames: trim, lowercase, replace runs of
+          # [^a-z0-9-] with '-', trim '-', fall back to "delivery", truncate, trim trailing '-'.
+          normalized="$(printf '%s' "$DELIVERY_ID" |
+            sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//' |
+            tr '[:upper:]' '[:lower:]' |
+            sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//')"
+          [[ -n "$normalized" ]] || normalized="delivery"
+          truncate_name() {
+            local value="${1:0:$2}"
+            while [[ "$value" == *- ]]; do value="${value%-}"; done
+            printf '%s' "$value"
+          }
+          namespace="qa-$(truncate_name "$normalized" 48)"
+          app_name="tst-$(truncate_name "$normalized" 24)"
+          # PostgreSQL identifiers use underscores; Kubernetes and Azure names keep hyphens.
+          pg_role="${app_name//-/_}"
+          [[ "$pg_role" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || {
+            echo "::error::Derived PostgreSQL role '$pg_role' is not a valid identifier." >&2
+            exit 1
+          }
+          {
+            echo "NAMESPACE=$namespace"
+            echo "APP_NAME=$app_name"
+            echo "PG_ROLE=$pg_role"
+          } >> "$GITHUB_ENV"
+
       - name: Verify deployment contract
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test -f Dockerfile
           test -f "$ARTIFACT_ROOT/runtime/deployment.json"
 
@@ -285,9 +366,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          registry="${{ vars.AZURE_CONTAINER_REGISTRY }}"
+          registry="$HUB_CONTAINER_REGISTRY"
           repository="${GITHUB_REPOSITORY##*/}"
-          image="$registry.azurecr.io/$repository:${{ inputs.candidate_sha }}"
+          image="$registry.azurecr.io/$repository:$CANDIDATE_SHA"
           az acr login --name "$registry"
           docker build --pull --tag "$image" .
           image_user="$(docker image inspect --format '{{.Config.User}}' "$image")"
@@ -321,7 +402,7 @@ jobs:
           digest="$(
             az acr repository show \
               --name "$registry" \
-              --image "$repository:${{ inputs.candidate_sha }}" \
+              --image "$repository:$CANDIDATE_SHA" \
               --query digest \
               --output tsv
           )"
@@ -333,19 +414,23 @@ jobs:
       - name: Deploy isolated AKS candidate namespace
         id: deployment
         shell: bash
+        env:
+          IMAGE: ${{ steps.image.outputs.value }}
+          RUN_AS_USER: ${{ steps.image.outputs.run_as_user }}
         run: |
           set -euo pipefail
-          cluster_resource_id="${{ inputs.aks_resource_id }}"
+          cluster_resource_id="$AKS_RESOURCE_ID"
           subscription_id="$(cut -d/ -f3 <<<"$cluster_resource_id")"
           cluster_resource_group="$(cut -d/ -f5 <<<"$cluster_resource_id")"
           provider="$(cut -d/ -f7 <<<"$cluster_resource_id")"
           resource_type="$(cut -d/ -f8 <<<"$cluster_resource_id")"
           cluster_name="$(cut -d/ -f9 <<<"$cluster_resource_id")"
-          test "$subscription_id" = "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          test "$subscription_id" = "$HUB_SUBSCRIPTION_ID"
           test "${provider,,}" = "microsoft.containerservice"
           test "${resource_type,,}" = "managedclusters"
           test -n "$cluster_resource_group"
           test -n "$cluster_name"
+          [[ "$RUN_AS_USER" =~ ^[1-9][0-9]*$ ]]
           az aks get-credentials \
             --resource-group "$cluster_resource_group" \
             --name "$cluster_name" \
@@ -353,19 +438,13 @@ jobs:
             --output none
           kubelogin convert-kubeconfig -l azurecli
 
-          namespace="qa-$(printf '%s' '${{ inputs.delivery_id }}' |
-            tr '[:upper:]' '[:lower:]' |
-            sed -E 's/[^a-z0-9-]+/-/g' |
-            cut -c1-48)"
-          app_name="tst-$(printf '%s' '${{ inputs.delivery_id }}' |
-            tr '[:upper:]' '[:lower:]' |
-            sed -E 's/[^a-z0-9-]+/-/g' |
-            cut -c1-24)"
+          namespace="$NAMESPACE"
+          app_name="$APP_NAME"
           port="$(jq -r '.containerPort' "$ARTIFACT_ROOT/runtime/deployment.json")"
           identity_name="id-$app_name"
           identity_json="$(
             az identity create \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
               --name "$identity_name" \
               --location "$(
                 az aks show \
@@ -377,15 +456,14 @@ jobs:
               --tags \
                 managed_by=AIDeliveryHub \
                 aideliveryhub_purpose=independent-qa \
-                aideliveryhub_delivery="${{ inputs.delivery_id }}" \
-                aideliveryhub_candidate_sha="${{ inputs.candidate_sha }}" \
-                aideliveryhub_image="${{ steps.image.outputs.value }}" \
+                aideliveryhub_delivery="$DELIVERY_ID" \
+                aideliveryhub_candidate_sha="$CANDIDATE_SHA" \
+                aideliveryhub_image="$IMAGE" \
               --output json
           )"
           workload_client_id="$(jq -er '.clientId' <<<"$identity_json")"
           workload_principal_id="$(jq -er '.principalId' <<<"$identity_json")"
-          workload_identity_resource_id="$(jq -er '.id' <<<"$identity_json")"
-          foundry_resource_id="${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}"
+          foundry_resource_id="$HUB_FOUNDRY_RESOURCE_ID"
           test -n "$foundry_resource_id"
           for role in \
             "Cognitive Services OpenAI User" \
@@ -415,19 +493,19 @@ jobs:
           )"
           test -n "$issuer"
           if az identity federated-credential show \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --resource-group "$HUB_RESOURCE_GROUP" \
             --identity-name "$identity_name" \
             --name workload \
             --output none 2>/dev/null; then
             az identity federated-credential delete \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
               --identity-name "$identity_name" \
               --name workload \
               --yes \
               --output none
           fi
           az identity federated-credential create \
-            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --resource-group "$HUB_RESOURCE_GROUP" \
             --identity-name "$identity_name" \
             --name workload \
             --issuer "$issuer" \
@@ -436,24 +514,27 @@ jobs:
             --output none
 
           env_vars=(
-            "AIDELIVERY_DELIVERY_ID=${{ inputs.delivery_id }}"
-            "AIDELIVERY_CANDIDATE_SHA=${{ inputs.candidate_sha }}"
+            "AIDELIVERY_DELIVERY_ID=$DELIVERY_ID"
+            "AIDELIVERY_CANDIDATE_SHA=$CANDIDATE_SHA"
             "AZURE_CLIENT_ID=$workload_client_id"
-            "AZURE_SPEECH_ENDPOINT=${{ vars.AZURE_SPEECH_ENDPOINT }}"
-            "FOUNDRY_PROJECT_ENDPOINT=${{ vars.AZURE_AI_PROJECT_ENDPOINT }}"
-            "AZURE_AI_PROJECT_ENDPOINT=${{ vars.AZURE_AI_PROJECT_ENDPOINT }}"
-            "AZURE_AI_MODEL_DEPLOYMENT_NAME=${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}"
+            "AZURE_SPEECH_ENDPOINT=$HUB_SPEECH_ENDPOINT"
+            "AZURE_SPEECH_RESOURCE_ID=$HUB_FOUNDRY_RESOURCE_ID"
+            "FOUNDRY_PROJECT_ENDPOINT=$HUB_AI_PROJECT_ENDPOINT"
+            "AZURE_AI_PROJECT_ENDPOINT=$HUB_AI_PROJECT_ENDPOINT"
+            "AZURE_AI_MODEL_DEPLOYMENT_NAME=$HUB_AI_MODEL_DEPLOYMENT"
           )
           if jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null; then
             declared_version="$(jq -r '.postgresql.version' "$ARTIFACT_ROOT/runtime/deployment.json")"
-            test "$declared_version" = "${{ vars.AZURE_POSTGRES_VERSION }}"
+            test "$declared_version" = "$HUB_POSTGRES_VERSION"
             logical_database="$(
               jq -r '.postgresql.databaseName' "$ARTIFACT_ROOT/runtime/deployment.json"
             )"
-            database_suffix="$(
-              printf '%s' '${{ inputs.delivery_id }}' | sha256sum | cut -c1-12
-            )"
+            database_suffix="$(printf '%s' "$DELIVERY_ID" | sha256sum | cut -c1-12)"
             database_name="${logical_database}_${database_suffix}"
+            [[ "$database_name" =~ ^[a-z][a-z0-9_]{0,62}$ ]] || {
+              echo "::error::Derived PostgreSQL database '$database_name' is not a valid identifier." >&2
+              exit 1
+            }
             host_key="$(
               jq -r '.postgresql.hostEnvironmentVariable' \
                 "$ARTIFACT_ROOT/runtime/deployment.json"
@@ -471,12 +552,13 @@ jobs:
                 "$ARTIFACT_ROOT/runtime/deployment.json"
             )"
             env_vars+=(
-              "$host_key=${{ vars.AZURE_POSTGRES_HOST }}"
+              "$host_key=$HUB_POSTGRES_HOST"
               "$database_key=$database_name"
-              "$user_key=$app_name"
+              "$user_key=$PG_ROLE"
               "$tls_key=true"
             )
             echo "postgres_database=$database_name" >> "$GITHUB_OUTPUT"
+            echo "postgres_role=$PG_ROLE" >> "$GITHUB_OUTPUT"
           fi
 
           test "$(kubectl get namespace "$namespace" -o name)" = \
@@ -580,8 +662,8 @@ jobs:
             status=$?
             if [[ -n "$firewall_rule" ]] &&
               ! az postgres flexible-server firewall-rule delete \
-                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-                --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+                --resource-group "$HUB_RESOURCE_GROUP" \
+                --server-name "$HUB_POSTGRES_SERVER" \
                 --name "$firewall_rule" \
                 --yes \
                 --output none; then
@@ -596,8 +678,8 @@ jobs:
             runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
             firewall_rule="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
             az postgres flexible-server firewall-rule create \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
+              --server-name "$HUB_POSTGRES_SERVER" \
               --name "$firewall_rule" \
               --start-ip-address "$runner_ip" \
               --end-ip-address "$runner_ip" \
@@ -609,8 +691,8 @@ jobs:
                 --query accessToken \
                 --output tsv
             )"
-            server="${{ vars.AZURE_POSTGRES_HOST }}"
-            admin_user="${{ vars.AZURE_POSTGRES_ADMIN_USER }}"
+            server="$HUB_POSTGRES_HOST"
+            admin_user="$HUB_POSTGRES_ADMIN_USER"
             admin_connection="host=$server port=5432 dbname=postgres user=$admin_user sslmode=require"
 
             psql "$admin_connection" \
@@ -618,7 +700,7 @@ jobs:
               --command "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)"
             psql "$admin_connection" \
               --set ON_ERROR_STOP=1 \
-              --command "DROP ROLE IF EXISTS \"$app_name\""
+              --command "DROP ROLE IF EXISTS \"$PG_ROLE\""
             psql "$admin_connection" \
               --set ON_ERROR_STOP=1 \
               --command "CREATE DATABASE \"$database_name\""
@@ -626,7 +708,7 @@ jobs:
               --set ON_ERROR_STOP=1 \
               --command \
                 "SELECT * FROM pgaadauth_create_principal_with_oid(
-                  '$app_name', '$workload_principal_id', 'service', false, false
+                  '$PG_ROLE', '$workload_principal_id', 'service', false, false
                 )"
 
             printf -v connection_string \
@@ -638,29 +720,29 @@ jobs:
             test "${#migration_command[@]}" -gt 0
             docker run --rm \
               --entrypoint "${migration_command[0]}" \
-              "${{ steps.image.outputs.value }}" \
+              "$IMAGE" \
               "${migration_command[@]:1}" \
               --connection "$connection_string"
 
             database_connection="host=$server port=5432 dbname=$database_name user=$admin_user sslmode=require"
             psql "$database_connection" \
               --set ON_ERROR_STOP=1 \
-              --command "GRANT CONNECT ON DATABASE \"$database_name\" TO \"$app_name\"" \
-              --command "GRANT USAGE ON SCHEMA public TO \"$app_name\"" \
-              --command "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$app_name\"" \
-              --command "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"$app_name\"" \
-              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$app_name\"" \
-              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"$app_name\""
+              --command "GRANT CONNECT ON DATABASE \"$database_name\" TO \"$PG_ROLE\"" \
+              --command "GRANT USAGE ON SCHEMA public TO \"$PG_ROLE\"" \
+              --command "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$PG_ROLE\"" \
+              --command "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"$PG_ROLE\"" \
+              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$PG_ROLE\"" \
+              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"$PG_ROLE\""
           fi
 
           deployment_manifest="$(
             kubectl -n "$namespace" create deployment candidate \
-              --image="${{ steps.image.outputs.value }}" \
+              --image="$IMAGE" \
               --dry-run=client -o json |
             kubectl set env --local -f - "${env_vars[@]}" -o json |
             jq \
-              --arg image "${{ steps.image.outputs.value }}" \
-              --argjson run_as_user "${{ steps.image.outputs.run_as_user }}" \
+              --arg image "$IMAGE" \
+              --argjson run_as_user "$RUN_AS_USER" \
               --argjson port "$port" '
               .spec.replicas = 1 |
               .spec.strategy = {type: "Recreate"} |
@@ -710,28 +792,30 @@ jobs:
           echo "app_name=$app_name" >> "$GITHUB_OUTPUT"
           echo "cluster_resource_id=$cluster_resource_id" >> "$GITHUB_OUTPUT"
           echo "namespace=$namespace" >> "$GITHUB_OUTPUT"
-          echo "image=${{ steps.image.outputs.value }}" >> "$GITHUB_OUTPUT"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
           echo "ingress_ip=$public_ip" >> "$GITHUB_OUTPUT"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
       - name: Verify deployed candidate health
         shell: bash
+        env:
+          CANDIDATE_URL: ${{ steps.deployment.outputs.url }}
         run: |
           set -euo pipefail
           health_path="$(jq -r '.healthPath' "$ARTIFACT_ROOT/runtime/deployment.json")"
           identity_path="$(
             jq -r '.candidateIdentityPath' "$ARTIFACT_ROOT/runtime/deployment.json"
           )"
-          health_url="${{ steps.deployment.outputs.url }}$health_path"
-          identity_url="${{ steps.deployment.outputs.url }}$identity_path"
+          health_url="$CANDIDATE_URL$health_path"
+          identity_url="$CANDIDATE_URL$identity_path"
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error --max-time 10 "$health_url" >/dev/null &&
               body="$(
                 curl --fail --silent --show-error --max-time 10 "$identity_url"
               )"; then
               if jq -e \
-                --arg delivery_id "${{ inputs.delivery_id }}" \
-                --arg candidate_sha "${{ inputs.candidate_sha }}" \
+                --arg delivery_id "$DELIVERY_ID" \
+                --arg candidate_sha "$CANDIDATE_SHA" \
                 '.deliveryId == $delivery_id and .candidateSha == $candidate_sha' \
                 <<<"$body" >/dev/null; then
                 exit 0
@@ -749,63 +833,70 @@ jobs:
         run: |
           set +e
           cleanup_failed=false
-          app_name="tst-$(printf '%s' '${{ inputs.delivery_id }}' |
-            tr '[:upper:]' '[:lower:]' |
-            sed -E 's/[^a-z0-9-]+/-/g' |
-            cut -c1-24)"
+          # Names come from the "Derive Delivery resource names" step; no resources exist before it.
+          if [[ -z "${APP_NAME:-}" || -z "${PG_ROLE:-}" ]]; then
+            echo "Resource names were not derived; nothing to clean."
+            exit 0
+          fi
+          app_name="$APP_NAME"
+          pg_role="$PG_ROLE"
           identity_name="id-$app_name"
 
-          if jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null; then
+          if [[ -n "${ARTIFACT_ROOT:-}" ]] &&
+            jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null 2>&1; then
             logical_database="$(
               jq -r '.postgresql.databaseName' "$ARTIFACT_ROOT/runtime/deployment.json"
             )"
-            database_suffix="$(
-              printf '%s' '${{ inputs.delivery_id }}' | sha256sum | cut -c1-12
-            )"
+            database_suffix="$(printf '%s' "$DELIVERY_ID" | sha256sum | cut -c1-12)"
             database_name="${logical_database}_${database_suffix}"
-            if ! command -v psql >/dev/null; then
-              sudo apt-get update &&
-                sudo apt-get install --yes --no-install-recommends postgresql-client ||
+            if [[ "$database_name" =~ ^[a-z][a-z0-9_]{0,62}$ ]] &&
+              [[ "$pg_role" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
+              if ! command -v psql >/dev/null; then
+                sudo apt-get update &&
+                  sudo apt-get install --yes --no-install-recommends postgresql-client ||
+                  cleanup_failed=true
+              fi
+              runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+              firewall_rule="gha-cleanup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+              az postgres flexible-server firewall-rule create \
+                --resource-group "$HUB_RESOURCE_GROUP" \
+                --server-name "$HUB_POSTGRES_SERVER" \
+                --name "$firewall_rule" \
+                --start-ip-address "$runner_ip" \
+                --end-ip-address "$runner_ip" \
+                --output none || cleanup_failed=true
+              export PGPASSWORD="$(
+                az account get-access-token \
+                  --resource https://ossrdbms-aad.database.windows.net \
+                  --query accessToken \
+                  --output tsv
+              )"
+              admin_connection="host=$HUB_POSTGRES_HOST port=5432 dbname=postgres user=$HUB_POSTGRES_ADMIN_USER sslmode=require"
+              psql "$admin_connection" \
+                --set ON_ERROR_STOP=1 \
+                --command "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)" \
+                --command "DROP ROLE IF EXISTS \"$pg_role\"" ||
                 cleanup_failed=true
+              az postgres flexible-server firewall-rule delete \
+                --resource-group "$HUB_RESOURCE_GROUP" \
+                --server-name "$HUB_POSTGRES_SERVER" \
+                --name "$firewall_rule" \
+                --yes \
+                --output none || cleanup_failed=true
+            else
+              echo "Skipping database cleanup: derived identifiers are invalid." >&2
             fi
-            runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
-            firewall_rule="gha-cleanup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-            az postgres flexible-server firewall-rule create \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
-              --name "$firewall_rule" \
-              --start-ip-address "$runner_ip" \
-              --end-ip-address "$runner_ip" \
-              --output none || cleanup_failed=true
-            export PGPASSWORD="$(
-              az account get-access-token \
-                --resource https://ossrdbms-aad.database.windows.net \
-                --query accessToken \
-                --output tsv
-            )"
-            admin_connection="host=${{ vars.AZURE_POSTGRES_HOST }} port=5432 dbname=postgres user=${{ vars.AZURE_POSTGRES_ADMIN_USER }} sslmode=require"
-            psql "$admin_connection" \
-              --set ON_ERROR_STOP=1 \
-              --command "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)" \
-              --command "DROP ROLE IF EXISTS \"$app_name\"" ||
-              cleanup_failed=true
-            az postgres flexible-server firewall-rule delete \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
-              --name "$firewall_rule" \
-              --yes \
-              --output none || cleanup_failed=true
           fi
 
           identity_json="$(
             az identity show \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
               --name "$identity_name" \
               --output json 2>/dev/null
           )"
           if [[ -n "$identity_json" ]]; then
             principal_id="$(jq -er '.principalId' <<<"$identity_json")"
-            foundry_resource_id="${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}"
+            foundry_resource_id="$HUB_FOUNDRY_RESOURCE_ID"
             assignments="$(
               az rest \
                 --method get \
@@ -821,7 +912,7 @@ jobs:
                 --output none || cleanup_failed=true
             done < <(jq -r '.value[].id' <<<"$assignments")
             az identity delete \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --resource-group "$HUB_RESOURCE_GROUP" \
               --name "$identity_name" \
               --output none || cleanup_failed=true
           fi

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0034-b01",
+  "stage": "coding",
+  "outcome": "passed",
+  "summary": "已修复真实 Foundry 增量传播与 WAV 驱动的浏览器完整功能证据，全部本地必做验证通过。",
+  "artifacts": [
+    { "path": "playwright.config.ts" },
+    { "path": "src/client/audio-capture.ts" },
+    { "path": "src/server/adapters/azure-foundry.ts" },
+    { "path": "src/server/adapters/deterministic.ts" },
+    { "path": "src/server/adapters/foundry.ts" },
+    { "path": "src/server/translation-session.ts" },
+    { "path": "src/shared/types.ts" },
+    { "path": "tests/contract/foundry.contract.test.ts" },
+    { "path": "tests/contract/websocket-session.contract.test.ts" },
+    { "path": "tests/e2e/audio-stream.spec.ts" },
+    { "path": "tests/e2e/language-detection.spec.ts" },
+    { "path": "tests/e2e/rejection-cases.spec.ts" },
+    { "path": "tests/e2e/streaming-subtitles.spec.ts" },
+    { "path": ".ai-delivery/features/002-v1/runtime/developer-functional-run.sh" },
+    { "path": ".ai-delivery/features/002-v1/reports/implementation.md" },
+    { "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0034-b01.json" }
+  ],
+  "progress": {
+    "completedTaskIds": [],
+    "blockedTaskIds": []
+  }
+}
