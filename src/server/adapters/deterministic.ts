@@ -24,7 +24,9 @@ export class RecordingSpeechAdapter implements SpeechAdapter {
     if (this.cancelled) throw new Error("Adapter cancelled");
     this.audio = Buffer.concat([this.audio, frame]);
     this.frames++;
-    const shouldEmit = this.emitted === 0 || (this.emitted === 1 && this.frames >= 106);
+    const shouldEmit = frame.length < 640
+      || this.emitted === 0
+      || (this.emitted === 1 && this.frames >= 106);
     if (frame.length >= 320 && shouldEmit && this.emitted < testSegments.length) {
       const source = testSegments[this.emitted]!;
       const detectedLanguage = frame[0] === 9 ? "zh-CN" : "en-US";
