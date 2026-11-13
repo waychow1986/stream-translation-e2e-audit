@@ -1,0 +1,832 @@
+name: Delivery candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_id:
+        description: AIDelivery Hub delivery identifier
+        required: true
+        type: string
+      attempt:
+        description: Candidate repair attempt
+        required: true
+        type: string
+      candidate_sha:
+        description: Immutable candidate commit
+        required: true
+        type: string
+      aks_resource_id:
+        description: Selected Independent QA AKS resource ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Candidate checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          persist-credentials: false
+
+      - name: Resolve active iteration artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=".ai-delivery"
+          if [[ -f .ai-delivery/context.json ]]; then
+            root="$(jq -er '.activeFeatureDirectory' .ai-delivery/context.json)"
+          fi
+          [[ "$root" == .ai-delivery/features/* || "$root" == ".ai-delivery" ]]
+          [[ "$root" != *".."* ]]
+          test -d "$root"
+          echo "ARTIFACT_ROOT=$root" >> "$GITHUB_ENV"
+
+      - name: Verify candidate contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          test -f Dockerfile
+          deployment="$ARTIFACT_ROOT/runtime/deployment.json"
+          test -f "$deployment"
+          jq -e '
+            def trim_ascii: gsub("^[ \t\r\n]+|[ \t\r\n]+$"; "");
+            def obvious_noop:
+              trim_ascii |
+              (if endswith(";") then .[:-1] | trim_ascii else . end) |
+              . == "true" or . == ":" or test("^exit[ \t]+0$") or
+              ((. == "echo" or . == "printf" or test("^(echo|printf)[ \t]")) and
+                (explode | any(
+                  . == 13 or . == 10 or . == 59 or . == 38 or . == 124 or
+                  . == 60 or . == 62 or . == 40 or . == 41 or . == 36 or
+                  . == 96 or . == 92
+                ) | not));
+            def category_commands($path):
+              if type != "array" then error($path + ": expected non-empty command array")
+              elif length == 0 then error($path + ": expected non-empty command array")
+              else
+                reduce to_entries[] as $item
+                  ([];
+                    ($path + "[" + ($item.key | tostring) + "]") as $item_path |
+                    if ($item.value | type) != "string" then
+                      error($item_path + ": expected command string")
+                    else
+                      ($item.value | trim_ascii) as $command |
+                      if $command == "" then error($item_path + ": empty command")
+                      elif index($command) != null then error($item_path + ": duplicate command")
+                      elif ($command | obvious_noop) then error($item_path + ": obvious no-op")
+                      else . + [$command] end
+                    end) | true
+              end;
+            .developerValidationCommands |
+            "$.developerValidationCommands" as $path |
+            ["staticAnalysis", "build", "developerTests", "integrationTests", "functionalTests"] as $categories |
+            if type != "object" then error($path + ": expected categorized object")
+            else
+              reduce keys_unsorted[] as $category
+                (.; if ($categories | index($category)) == null then
+                  error($path + "." + $category + ": unknown category")
+                else . end) |
+              reduce $categories[:3][] as $required
+                (.; if has($required) then . else
+                  error($path + "." + $required + ": required category missing") end) |
+              to_entries | all(.[];
+                .key as $category | .value | category_commands($path + "." + $category))
+            end
+          ' "$deployment" >/dev/null
+          jq -e '
+            (.containerPort | type == "number" and . > 0 and . < 65536) and
+            (.healthPath | type == "string" and startswith("/")) and
+            (.candidateIdentityPath | type == "string" and startswith("/")) and
+            ((.migrationCommand // []) as $command |
+              ($command | type == "array") and
+              all($command[]; type == "string" and length > 0)) and
+            ((.developerSetupCommands // []) as $commands |
+              ($commands | type == "array") and
+              all($commands[]; type == "string" and length > 0)) and
+            (.developerFunctionalTestScript | type == "string" and length > 0) and
+            (.requiresPrivateNetwork | type == "boolean") and
+            ((.postgresql // null) as $postgresql |
+              $postgresql == null or (
+                ($postgresql.version | type == "string" and length > 0) and
+                ($postgresql.databaseName |
+                  type == "string" and test("^[a-z][a-z0-9_]{0,47}$")) and
+                ($postgresql.managedIdentityAuthentication == true) and
+                ([
+                  $postgresql.hostEnvironmentVariable,
+                  $postgresql.databaseEnvironmentVariable,
+                  $postgresql.userEnvironmentVariable,
+                  $postgresql.requireTlsEnvironmentVariable
+                ] as $variables |
+                  all(
+                    $variables[];
+                    type == "string" and test("^[A-Za-z_][A-Za-z0-9_]*$")
+                  ) and
+                  ($variables | unique | length == 4)) and
+                (.migrationCommand | type == "array" and length > 0)
+              ))
+          ' "$deployment" >/dev/null
+          functional_script="$(jq -r '.developerFunctionalTestScript' "$deployment")"
+          [[ "$functional_script" == "$ARTIFACT_ROOT"/* ]]
+          [[ "$functional_script" != *".."* ]]
+          test -f "$functional_script"
+          bash -n "$functional_script"
+          if jq -e '.requiresPrivateNetwork' "$deployment" >/dev/null; then
+            echo "Candidate checks require a dedicated private-network runner." >&2
+            exit 1
+          fi
+
+      - name: Prepare candidate-declared validation environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '(.developerSetupCommands // []) | to_entries[] |
+            [(.key + 1 | tostring), (.value | @base64)] | @tsv' \
+            "$ARTIFACT_ROOT/runtime/deployment.json" |
+            while IFS=$'\t' read -r index encoded; do
+              encoded="${encoded%$'\r'}"
+              command_file="$(mktemp "$RUNNER_TEMP/candidate-setup.XXXXXX")"
+              trap 'status=$?; rm -f -- "$command_file"; exit "$status"' EXIT
+              printf '%s' "$encoded" | base64 --decode > "$command_file"
+              if bash -euo pipefail "$command_file" < /dev/null; then status=0; else status=$?; fi
+              printf 'setup[%s] exit %s\n' "$index" "$status"
+              if (( status != 0 )); then exit "$status"; fi
+              rm -f -- "$command_file"
+              trap - EXIT
+            done
+
+      - name: Prepare Playwright runtime when declared
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f package.json ]] ||
+            ! jq -e '
+              ((.dependencies // {}) + (.devDependencies // {})) as $deps |
+              ($deps | has("@playwright/test")) or ($deps | has("playwright"))
+            ' package.json >/dev/null; then
+            exit 0
+          fi
+
+          if [[ -x node_modules/.bin/playwright ]]; then
+            node_modules/.bin/playwright install --with-deps chromium
+            exit 0
+          fi
+
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          elif [[ -f pnpm-lock.yaml ]]; then
+            corepack enable
+            pnpm install --frozen-lockfile
+          elif [[ -f yarn.lock ]]; then
+            corepack enable
+            yarn install --immutable
+          else
+            npm install
+          fi
+
+          test -x node_modules/.bin/playwright
+          node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run static checks, build, and deterministic developer tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '.developerValidationCommands as $commands |
+            ["staticAnalysis", "build", "developerTests", "integrationTests", "functionalTests"][] as $category |
+            ($commands[$category] // [] | to_entries[]) |
+            [$category, (.key + 1 | tostring), (.value | @base64)] | @tsv' \
+            "$ARTIFACT_ROOT/runtime/deployment.json" |
+            while IFS=$'\t' read -r category index encoded; do
+              encoded="${encoded%$'\r'}"
+              command_file="$(mktemp "$RUNNER_TEMP/candidate-validation.XXXXXX")"
+              trap 'status=$?; rm -f -- "$command_file"; exit "$status"' EXIT
+              printf '%s' "$encoded" | base64 --decode > "$command_file"
+              if bash -euo pipefail "$command_file" < /dev/null; then status=0; else status=$?; fi
+              printf '%s[%s] exit %s\n' "$category" "$index" "$status"
+              if (( status != 0 )); then exit "$status"; fi
+              rm -f -- "$command_file"
+              trap - EXIT
+            done
+
+  deploy:
+    name: Delivery validation
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          persist-credentials: false
+
+      - name: Resolve active iteration artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=".ai-delivery"
+          if [[ -f .ai-delivery/context.json ]]; then
+            root="$(jq -er '.activeFeatureDirectory' .ai-delivery/context.json)"
+          fi
+          [[ "$root" == .ai-delivery/features/* || "$root" == ".ai-delivery" ]]
+          [[ "$root" != *".."* ]]
+          test -d "$root"
+          echo "ARTIFACT_ROOT=$root" >> "$GITHUB_ENV"
+
+      - name: Verify deployment contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.candidate_sha }}"
+          test -f Dockerfile
+          test -f "$ARTIFACT_ROOT/runtime/deployment.json"
+
+      - name: Prepare candidate-declared deployment environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '(.developerSetupCommands // []) | to_entries[] |
+            [(.key + 1 | tostring), (.value | @base64)] | @tsv' \
+            "$ARTIFACT_ROOT/runtime/deployment.json" |
+            while IFS=$'\t' read -r index encoded; do
+              encoded="${encoded%$'\r'}"
+              command_file="$(mktemp "$RUNNER_TEMP/candidate-deploy-setup.XXXXXX")"
+              trap 'status=$?; rm -f -- "$command_file"; exit "$status"' EXIT
+              printf '%s' "$encoded" | base64 --decode > "$command_file"
+              if bash -euo pipefail "$command_file" < /dev/null; then status=0; else status=$?; fi
+              printf 'deploy-setup[%s] exit %s\n' "$index" "$status"
+              if (( status != 0 )); then exit "$status"; fi
+              rm -f -- "$command_file"
+              trap - EXIT
+            done
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up kubelogin
+        uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: v0.2.22
+
+      - name: Build and push candidate image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          registry="${{ vars.AZURE_CONTAINER_REGISTRY }}"
+          repository="${GITHUB_REPOSITORY##*/}"
+          image="$registry.azurecr.io/$repository:${{ inputs.candidate_sha }}"
+          az acr login --name "$registry"
+          docker build --pull --tag "$image" .
+          image_user="$(docker image inspect --format '{{.Config.User}}' "$image")"
+          test -n "$image_user"
+          image_user="${image_user%%:*}"
+          if [[ "$image_user" =~ ^[0-9]+$ ]]; then
+            run_as_user="$image_user"
+          else
+            metadata_container="$(docker create "$image" /bin/true)"
+            metadata_directory="$(mktemp -d "$RUNNER_TEMP/candidate-image-user.XXXXXX")"
+            cleanup_image_metadata() {
+              status=$?
+              docker rm "$metadata_container" >/dev/null 2>&1 || true
+              rm -rf -- "$metadata_directory"
+              return "$status"
+            }
+            trap cleanup_image_metadata EXIT
+            docker cp "$metadata_container:/etc/passwd" "$metadata_directory/passwd"
+            run_as_user="$(
+              awk -F: -v user="$image_user" '$1 == user { print $3; exit }' \
+                "$metadata_directory/passwd"
+            )"
+            cleanup_image_metadata
+            trap - EXIT
+          fi
+          if [[ ! "$run_as_user" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Candidate image user must resolve to a positive numeric UID." >&2
+            exit 1
+          fi
+          docker push "$image"
+          digest="$(
+            az acr repository show \
+              --name "$registry" \
+              --image "$repository:${{ inputs.candidate_sha }}" \
+              --query digest \
+              --output tsv
+          )"
+          test -n "$digest"
+          echo "tagged=$image" >> "$GITHUB_OUTPUT"
+          echo "value=$registry.azurecr.io/$repository@$digest" >> "$GITHUB_OUTPUT"
+          echo "run_as_user=$run_as_user" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy isolated AKS candidate namespace
+        id: deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cluster_resource_id="${{ inputs.aks_resource_id }}"
+          subscription_id="$(cut -d/ -f3 <<<"$cluster_resource_id")"
+          cluster_resource_group="$(cut -d/ -f5 <<<"$cluster_resource_id")"
+          provider="$(cut -d/ -f7 <<<"$cluster_resource_id")"
+          resource_type="$(cut -d/ -f8 <<<"$cluster_resource_id")"
+          cluster_name="$(cut -d/ -f9 <<<"$cluster_resource_id")"
+          test "$subscription_id" = "${{ vars.AZURE_SUBSCRIPTION_ID }}"
+          test "${provider,,}" = "microsoft.containerservice"
+          test "${resource_type,,}" = "managedclusters"
+          test -n "$cluster_resource_group"
+          test -n "$cluster_name"
+          az aks get-credentials \
+            --resource-group "$cluster_resource_group" \
+            --name "$cluster_name" \
+            --overwrite-existing \
+            --output none
+          kubelogin convert-kubeconfig -l azurecli
+
+          namespace="qa-$(printf '%s' '${{ inputs.delivery_id }}' |
+            tr '[:upper:]' '[:lower:]' |
+            sed -E 's/[^a-z0-9-]+/-/g' |
+            cut -c1-48)"
+          app_name="tst-$(printf '%s' '${{ inputs.delivery_id }}' |
+            tr '[:upper:]' '[:lower:]' |
+            sed -E 's/[^a-z0-9-]+/-/g' |
+            cut -c1-24)"
+          port="$(jq -r '.containerPort' "$ARTIFACT_ROOT/runtime/deployment.json")"
+          identity_name="id-$app_name"
+          identity_json="$(
+            az identity create \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$identity_name" \
+              --location "$(
+                az aks show \
+                  --resource-group "$cluster_resource_group" \
+                  --name "$cluster_name" \
+                  --query location \
+                  --output tsv
+              )" \
+              --tags \
+                managed_by=AIDeliveryHub \
+                aideliveryhub_purpose=independent-qa \
+                aideliveryhub_delivery="${{ inputs.delivery_id }}" \
+                aideliveryhub_candidate_sha="${{ inputs.candidate_sha }}" \
+                aideliveryhub_image="${{ steps.image.outputs.value }}" \
+              --output json
+          )"
+          workload_client_id="$(jq -er '.clientId' <<<"$identity_json")"
+          workload_principal_id="$(jq -er '.principalId' <<<"$identity_json")"
+          workload_identity_resource_id="$(jq -er '.id' <<<"$identity_json")"
+          foundry_resource_id="${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}"
+          test -n "$foundry_resource_id"
+          for role in \
+            "Cognitive Services OpenAI User" \
+            "Cognitive Services Speech User"; do
+            assigned=false
+            for retry in $(seq 1 12); do
+              if az role assignment create \
+                --assignee-object-id "$workload_principal_id" \
+                --assignee-principal-type ServicePrincipal \
+                --role "$role" \
+                --scope "$foundry_resource_id" \
+                --output none; then
+                assigned=true
+                break
+              fi
+              sleep 5
+            done
+            test "$assigned" = true
+          done
+
+          issuer="$(
+            az aks show \
+              --resource-group "$cluster_resource_group" \
+              --name "$cluster_name" \
+              --query oidcIssuerProfile.issuerUrl \
+              --output tsv
+          )"
+          test -n "$issuer"
+          if az identity federated-credential show \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --identity-name "$identity_name" \
+            --name workload \
+            --output none 2>/dev/null; then
+            az identity federated-credential delete \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --identity-name "$identity_name" \
+              --name workload \
+              --yes \
+              --output none
+          fi
+          az identity federated-credential create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --identity-name "$identity_name" \
+            --name workload \
+            --issuer "$issuer" \
+            --subject "system:serviceaccount:$namespace:candidate" \
+            --audiences api://AzureADTokenExchange \
+            --output none
+
+          env_vars=(
+            "AIDELIVERY_DELIVERY_ID=${{ inputs.delivery_id }}"
+            "AIDELIVERY_CANDIDATE_SHA=${{ inputs.candidate_sha }}"
+            "AZURE_CLIENT_ID=$workload_client_id"
+            "AZURE_SPEECH_ENDPOINT=${{ vars.AZURE_SPEECH_ENDPOINT }}"
+            "FOUNDRY_PROJECT_ENDPOINT=${{ vars.AZURE_AI_PROJECT_ENDPOINT }}"
+            "AZURE_AI_PROJECT_ENDPOINT=${{ vars.AZURE_AI_PROJECT_ENDPOINT }}"
+            "AZURE_AI_MODEL_DEPLOYMENT_NAME=${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}"
+          )
+          if jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null; then
+            declared_version="$(jq -r '.postgresql.version' "$ARTIFACT_ROOT/runtime/deployment.json")"
+            test "$declared_version" = "${{ vars.AZURE_POSTGRES_VERSION }}"
+            logical_database="$(
+              jq -r '.postgresql.databaseName' "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            database_suffix="$(
+              printf '%s' '${{ inputs.delivery_id }}' | sha256sum | cut -c1-12
+            )"
+            database_name="${logical_database}_${database_suffix}"
+            host_key="$(
+              jq -r '.postgresql.hostEnvironmentVariable' \
+                "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            database_key="$(
+              jq -r '.postgresql.databaseEnvironmentVariable' \
+                "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            user_key="$(
+              jq -r '.postgresql.userEnvironmentVariable' \
+                "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            tls_key="$(
+              jq -r '.postgresql.requireTlsEnvironmentVariable' \
+                "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            env_vars+=(
+              "$host_key=${{ vars.AZURE_POSTGRES_HOST }}"
+              "$database_key=$database_name"
+              "$user_key=$app_name"
+              "$tls_key=true"
+            )
+            echo "postgres_database=$database_name" >> "$GITHUB_OUTPUT"
+          fi
+
+          test "$(kubectl get namespace "$namespace" -o name)" = \
+            "namespace/$namespace"
+          cat <<EOF | kubectl apply -f -
+          apiVersion: v1
+          kind: ResourceQuota
+          metadata:
+            name: delivery-quota
+            namespace: $namespace
+          spec:
+            hard:
+              requests.cpu: "1"
+              requests.memory: 2Gi
+              limits.cpu: "2"
+              limits.memory: 4Gi
+              pods: "4"
+          ---
+          apiVersion: v1
+          kind: LimitRange
+          metadata:
+            name: delivery-defaults
+            namespace: $namespace
+          spec:
+            limits:
+              - type: Container
+                defaultRequest:
+                  cpu: 100m
+                  memory: 256Mi
+                default:
+                  cpu: 1
+                  memory: 1Gi
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: default-deny
+            namespace: $namespace
+          spec:
+            podSelector: {}
+            policyTypes:
+              - Ingress
+              - Egress
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: candidate-ingress
+            namespace: $namespace
+          spec:
+            podSelector:
+              matchLabels:
+                app: candidate
+            policyTypes:
+              - Ingress
+            ingress:
+              - ports:
+                  - protocol: TCP
+                    port: $port
+          ---
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: candidate-egress
+            namespace: $namespace
+          spec:
+            podSelector:
+              matchLabels:
+                app: candidate
+            policyTypes:
+              - Egress
+            egress:
+              - to:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: kube-system
+                    podSelector:
+                      matchLabels:
+                        k8s-app: kube-dns
+                ports:
+                  - protocol: UDP
+                    port: 53
+                  - protocol: TCP
+                    port: 53
+              - to:
+                  - ipBlock:
+                      cidr: 0.0.0.0/0
+                      except:
+                        - 10.0.0.0/8
+                        - 172.16.0.0/12
+                        - 192.168.0.0/16
+          EOF
+          kubectl -n "$namespace" create serviceaccount candidate \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$namespace" annotate serviceaccount candidate \
+            azure.workload.identity/client-id="$workload_client_id" \
+            --overwrite
+
+          firewall_rule=""
+          cleanup_firewall() {
+            status=$?
+            if [[ -n "$firewall_rule" ]] &&
+              ! az postgres flexible-server firewall-rule delete \
+                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+                --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+                --name "$firewall_rule" \
+                --yes \
+                --output none; then
+              if (( status == 0 )); then status=1; fi
+            fi
+            exit "$status"
+          }
+          trap cleanup_firewall EXIT
+          if jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install --yes --no-install-recommends postgresql-client
+            runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+            firewall_rule="gha-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            az postgres flexible-server firewall-rule create \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --name "$firewall_rule" \
+              --start-ip-address "$runner_ip" \
+              --end-ip-address "$runner_ip" \
+              --output none
+
+            export PGPASSWORD="$(
+              az account get-access-token \
+                --resource https://ossrdbms-aad.database.windows.net \
+                --query accessToken \
+                --output tsv
+            )"
+            server="${{ vars.AZURE_POSTGRES_HOST }}"
+            admin_user="${{ vars.AZURE_POSTGRES_ADMIN_USER }}"
+            admin_connection="host=$server port=5432 dbname=postgres user=$admin_user sslmode=require"
+
+            psql "$admin_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)"
+            psql "$admin_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command "DROP ROLE IF EXISTS \"$app_name\""
+            psql "$admin_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command "CREATE DATABASE \"$database_name\""
+            psql "$admin_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command \
+                "SELECT * FROM pgaadauth_create_principal_with_oid(
+                  '$app_name', '$workload_principal_id', 'service', false, false
+                )"
+
+            printf -v connection_string \
+              'Host=%s;Port=5432;Database=%s;Username=%s;%s=%s;SSL Mode=Require' \
+              "$server" "$database_name" "$admin_user" "Password" "$PGPASSWORD"
+            mapfile -t migration_command < <(
+              jq -r '.migrationCommand[]' "$ARTIFACT_ROOT/runtime/deployment.json"
+            )
+            test "${#migration_command[@]}" -gt 0
+            docker run --rm \
+              --entrypoint "${migration_command[0]}" \
+              "${{ steps.image.outputs.value }}" \
+              "${migration_command[@]:1}" \
+              --connection "$connection_string"
+
+            database_connection="host=$server port=5432 dbname=$database_name user=$admin_user sslmode=require"
+            psql "$database_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command "GRANT CONNECT ON DATABASE \"$database_name\" TO \"$app_name\"" \
+              --command "GRANT USAGE ON SCHEMA public TO \"$app_name\"" \
+              --command "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO \"$app_name\"" \
+              --command "GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO \"$app_name\"" \
+              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO \"$app_name\"" \
+              --command "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO \"$app_name\""
+          fi
+
+          deployment_manifest="$(
+            kubectl -n "$namespace" create deployment candidate \
+              --image="${{ steps.image.outputs.value }}" \
+              --dry-run=client -o json |
+            kubectl set env --local -f - "${env_vars[@]}" -o json |
+            jq \
+              --arg image "${{ steps.image.outputs.value }}" \
+              --argjson run_as_user "${{ steps.image.outputs.run_as_user }}" \
+              --argjson port "$port" '
+              .spec.replicas = 1 |
+              .spec.strategy = {type: "Recreate"} |
+              .spec.template.metadata.labels += {
+                app: "candidate",
+                "azure.workload.identity/use": "true"
+              } |
+              .spec.template.spec.serviceAccountName = "candidate" |
+              .spec.template.spec.securityContext = {
+                runAsNonRoot: true,
+                runAsUser: $run_as_user,
+                seccompProfile: {type: "RuntimeDefault"}
+              } |
+              .spec.template.spec.containers[0] |= (
+                .name = "candidate" |
+                .image = $image |
+                .ports = [{name: "http", containerPort: $port}] |
+                .securityContext = {
+                  allowPrivilegeEscalation: false,
+                  capabilities: {drop: ["ALL"]}
+                } |
+                .resources = {
+                  requests: {cpu: "100m", memory: "256Mi"},
+                  limits: {cpu: "1", memory: "1Gi"}
+                }
+              )'
+          )"
+          printf '%s\n' "$deployment_manifest" | kubectl apply -f -
+          kubectl -n "$namespace" create service loadbalancer candidate \
+            --tcp="80:$port" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$namespace" rollout status deployment/candidate --timeout=5m
+          public_ip=""
+          for attempt in $(seq 1 60); do
+            public_ip="$(
+              kubectl -n "$namespace" get service candidate \
+                --output=jsonpath='{.status.loadBalancer.ingress[0].ip}' \
+                2>/dev/null || true
+            )"
+            [[ -n "$public_ip" ]] && break
+            sleep 5
+          done
+          python3 -c \
+            'import ipaddress, sys; assert ipaddress.ip_address(sys.argv[1]).version == 4' \
+            "$public_ip"
+          url="http://$public_ip"
+          echo "app_name=$app_name" >> "$GITHUB_OUTPUT"
+          echo "cluster_resource_id=$cluster_resource_id" >> "$GITHUB_OUTPUT"
+          echo "namespace=$namespace" >> "$GITHUB_OUTPUT"
+          echo "image=${{ steps.image.outputs.value }}" >> "$GITHUB_OUTPUT"
+          echo "ingress_ip=$public_ip" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployed candidate health
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_path="$(jq -r '.healthPath' "$ARTIFACT_ROOT/runtime/deployment.json")"
+          identity_path="$(
+            jq -r '.candidateIdentityPath' "$ARTIFACT_ROOT/runtime/deployment.json"
+          )"
+          health_url="${{ steps.deployment.outputs.url }}$health_path"
+          identity_url="${{ steps.deployment.outputs.url }}$identity_path"
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --max-time 10 "$health_url" >/dev/null &&
+              body="$(
+                curl --fail --silent --show-error --max-time 10 "$identity_url"
+              )"; then
+              if jq -e \
+                --arg delivery_id "${{ inputs.delivery_id }}" \
+                --arg candidate_sha "${{ inputs.candidate_sha }}" \
+                '.deliveryId == $delivery_id and .candidateSha == $candidate_sha' \
+                <<<"$body" >/dev/null; then
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Candidate readiness failed: $health_url" >&2
+          echo "Candidate immutable identity check failed: $identity_url" >&2
+          exit 1
+
+      - name: Clean failed candidate resources
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          cleanup_failed=false
+          app_name="tst-$(printf '%s' '${{ inputs.delivery_id }}' |
+            tr '[:upper:]' '[:lower:]' |
+            sed -E 's/[^a-z0-9-]+/-/g' |
+            cut -c1-24)"
+          identity_name="id-$app_name"
+
+          if jq -e '.postgresql != null' "$ARTIFACT_ROOT/runtime/deployment.json" >/dev/null; then
+            logical_database="$(
+              jq -r '.postgresql.databaseName' "$ARTIFACT_ROOT/runtime/deployment.json"
+            )"
+            database_suffix="$(
+              printf '%s' '${{ inputs.delivery_id }}' | sha256sum | cut -c1-12
+            )"
+            database_name="${logical_database}_${database_suffix}"
+            if ! command -v psql >/dev/null; then
+              sudo apt-get update &&
+                sudo apt-get install --yes --no-install-recommends postgresql-client ||
+                cleanup_failed=true
+            fi
+            runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+            firewall_rule="gha-cleanup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            az postgres flexible-server firewall-rule create \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --name "$firewall_rule" \
+              --start-ip-address "$runner_ip" \
+              --end-ip-address "$runner_ip" \
+              --output none || cleanup_failed=true
+            export PGPASSWORD="$(
+              az account get-access-token \
+                --resource https://ossrdbms-aad.database.windows.net \
+                --query accessToken \
+                --output tsv
+            )"
+            admin_connection="host=${{ vars.AZURE_POSTGRES_HOST }} port=5432 dbname=postgres user=${{ vars.AZURE_POSTGRES_ADMIN_USER }} sslmode=require"
+            psql "$admin_connection" \
+              --set ON_ERROR_STOP=1 \
+              --command "DROP DATABASE IF EXISTS \"$database_name\" WITH (FORCE)" \
+              --command "DROP ROLE IF EXISTS \"$app_name\"" ||
+              cleanup_failed=true
+            az postgres flexible-server firewall-rule delete \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --name "$firewall_rule" \
+              --yes \
+              --output none || cleanup_failed=true
+          fi
+
+          identity_json="$(
+            az identity show \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$identity_name" \
+              --output json 2>/dev/null
+          )"
+          if [[ -n "$identity_json" ]]; then
+            principal_id="$(jq -er '.principalId' <<<"$identity_json")"
+            foundry_resource_id="${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}"
+            assignments="$(
+              az rest \
+                --method get \
+                --url \
+                "${foundry_resource_id}/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&\$filter=principalId%20eq%20'${principal_id}'" \
+                --output json
+            )"
+            while IFS= read -r assignment_id; do
+              [[ -z "$assignment_id" ]] && continue
+              az rest \
+                --method delete \
+                --url "${assignment_id}?api-version=2022-04-01" \
+                --output none || cleanup_failed=true
+            done < <(jq -r '.value[].id' <<<"$assignments")
+            az identity delete \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --name "$identity_name" \
+              --output none || cleanup_failed=true
+          fi
+
+          if [[ "$cleanup_failed" == true ]]; then
+            echo "One or more failed Candidate resources could not be cleaned." >&2
+            exit 1
+          fi

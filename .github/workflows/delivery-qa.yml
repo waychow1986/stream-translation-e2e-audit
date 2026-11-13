@@ -1,0 +1,256 @@
+name: Independent QA
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_id:
+        description: AIDelivery Hub delivery identifier
+        required: true
+        type: string
+      attempt:
+        description: Candidate repair attempt
+        required: true
+        type: string
+      candidate_sha:
+        description: Immutable candidate commit
+        required: true
+        type: string
+      candidate_url:
+        description: Deployed candidate base URL
+        required: true
+        type: string
+      health_path:
+        description: Candidate health endpoint path
+        required: true
+        type: string
+      qa_evidence_branch:
+        description: Copilot QA evidence branch
+        required: true
+        type: string
+      qa_plan_path:
+        description: Locked tasks-qa.md repository path
+        required: true
+        type: string
+      qa_plan_commit_sha:
+        description: Commit containing the locked QA plan
+        required: true
+        type: string
+      qa_plan_hash:
+        description: SHA-256 hash of the locked QA plan
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  qa:
+    name: Independent QA execution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Copilot QA evidence branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.qa_evidence_branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve active iteration artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=".ai-delivery"
+          if [[ -f .ai-delivery/context.json ]]; then
+            root="$(jq -er '.activeFeatureDirectory' .ai-delivery/context.json)"
+          fi
+          [[ "$root" == .ai-delivery/features/* || "$root" == ".ai-delivery" ]]
+          [[ "$root" != *".."* ]]
+          test -d "$root"
+          echo "ARTIFACT_ROOT=$root" >> "$GITHUB_ENV"
+
+      - name: Verify QA plan isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_plan="$ARTIFACT_ROOT/tasks-qa.md"
+          qa_script="$ARTIFACT_ROOT/runtime/qa-run.sh"
+          test "${{ inputs.qa_plan_path }}" = "$qa_plan"
+          test "$(git rev-parse HEAD)" = "${{ inputs.qa_plan_commit_sha }}"
+          test -f "$qa_plan"
+          test -f "$qa_script"
+          git merge-base --is-ancestor "${{ inputs.candidate_sha }}" HEAD
+          actual_hash="sha256:$(sha256sum "$qa_plan" | cut -d' ' -f1)"
+          test "$actual_hash" = "${{ inputs.qa_plan_hash }}"
+          unexpected="$(
+            git diff --name-only "${{ inputs.candidate_sha }}..HEAD" |
+              grep -Fvx "$qa_plan" |
+              grep -Fvx "$qa_script" || true
+          )"
+          if [[ -n "$unexpected" ]]; then
+            echo "QA evidence branch contains changes outside the locked QA artifacts:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+          bash -n "$qa_script"
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        env:
+          AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Execute isolated black-box QA plan
+        id: execute
+        shell: bash
+        env:
+          AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
+        run: |
+          set -euo pipefail
+          script="$GITHUB_WORKSPACE/$ARTIFACT_ROOT/runtime/qa-run.sh"
+          result="$GITHUB_WORKSPACE/$ARTIFACT_ROOT/runtime/qa-result.json"
+          log="$RUNNER_TEMP/qa-run.log"
+          work="$RUNNER_TEMP/qa-work"
+          rm -rf "$work"
+          mkdir -p "$work"
+          rm -f "$result"
+
+          set +e
+          (
+            cd "$work"
+            if [[ -f "$GITHUB_WORKSPACE/package.json" ]] &&
+              [[ -f "$GITHUB_WORKSPACE/package-lock.json" ]]; then
+              cp "$GITHUB_WORKSPACE/package.json" .
+              cp "$GITHUB_WORKSPACE/package-lock.json" .
+              timeout 5m npm ci --ignore-scripts --no-audit --no-fund
+              if [[ -x node_modules/.bin/playwright ]]; then
+                PLAYWRIGHT_BROWSERS_PATH="$work/.playwright" \
+                  timeout 5m ./node_modules/.bin/playwright install chromium
+              fi
+            fi
+            timeout 15m env -i \
+              PATH="$PATH" \
+              HOME="$work" \
+              PLAYWRIGHT_BROWSERS_PATH="$work/.playwright" \
+              QA_DELIVERY_ID="${{ inputs.delivery_id }}" \
+              QA_CANDIDATE_SHA="${{ inputs.candidate_sha }}" \
+              QA_BASE_URL="${{ inputs.candidate_url }}" \
+              QA_HEALTH_PATH="${{ inputs.health_path }}" \
+              QA_PLAN_COMMIT_SHA="${{ inputs.qa_plan_commit_sha }}" \
+              QA_PLAN_HASH="${{ inputs.qa_plan_hash }}" \
+              QA_RESULT_PATH="$result" \
+              AZURE_CONFIG_DIR="$AZURE_CONFIG_DIR" \
+              AZURE_CLIENT_ID="${{ vars.AZURE_CLIENT_ID }}" \
+              AZURE_TENANT_ID="${{ vars.AZURE_TENANT_ID }}" \
+              AZURE_SUBSCRIPTION_ID="${{ vars.AZURE_SUBSCRIPTION_ID }}" \
+              AZURE_SPEECH_ENDPOINT="${{ vars.AZURE_SPEECH_ENDPOINT }}" \
+              AZURE_AI_PROJECT_ENDPOINT="${{ vars.AZURE_AI_PROJECT_ENDPOINT }}" \
+              AZURE_AI_MODEL_DEPLOYMENT="${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}" \
+              bash "$script"
+          ) >"$log" 2>&1
+          status=$?
+          set -e
+
+          valid=false
+          if [[ -f "$result" ]] && [[ "$(wc -c <"$result")" -le 262144 ]]; then
+            if jq -e \
+              --arg sha "${{ inputs.candidate_sha }}" \
+              --arg url "${{ inputs.candidate_url }}" \
+              '
+                (.passed | type == "boolean") and
+                (.testedCommitSha == $sha) and
+                (.environmentUrl | rtrimstr("/") == ($url | rtrimstr("/"))) and
+                (.qaPlanCommitSha == "${{ inputs.qa_plan_commit_sha }}") and
+                (.qaPlanHash == "${{ inputs.qa_plan_hash }}") and
+                (.summary | type == "string") and
+                (.defects | type == "array" and all(.[]; type == "string")) and
+                (.testGaps | type == "array" and all(.[]; type == "string")) and
+                (.evidence | type == "array" and all(.[]; type == "string")) and
+                ((.bugfixResults // []) | type == "array" and all(
+                  .[];
+                  (.bugfixId | type == "string" and length > 0) and
+                  (.verdict == "verified" or .verdict == "partial" or
+                    .verdict == "failed") and
+                  (.evidence | type == "string" and length > 0)
+                )) and
+                (.scenarios | type == "array") and
+                all(
+                  .scenarios[];
+                  (.id | type == "string" and length > 0) and
+                  (.passed | type == "boolean") and
+                  (.externalServices | type == "array" and all(.[]; type == "string")) and
+                  (.evidence | type == "string" and length > 0)
+                ) and
+                (((.defects | length == 0) and (.testGaps | length == 0)) or
+                  (.scenarios | length > 0)) and
+                ((.passed == false) or
+                  ((.scenarios | length > 0) and
+                    all(.scenarios[]; .passed == true))) and
+                ((.passed == false) or
+                  ((.defects | length == 0) and (.testGaps | length == 0)))
+              ' "$result" >/dev/null; then
+              if [[ "$status" -eq 0 ]] || jq -e '.passed == false' "$result" >/dev/null; then
+                valid=true
+              fi
+            fi
+          fi
+
+          unauthorized="$(
+            git status --porcelain --untracked-files=all |
+              grep -Fvx "?? $ARTIFACT_ROOT/runtime/qa-result.json" || true
+          )"
+          if [[ -n "$unauthorized" ]]; then
+            valid=false
+            printf 'QA plan modified unauthorized workspace files:\n%s\n' \
+              "$unauthorized" >>"$log"
+          fi
+
+          if [[ "$valid" != true ]]; then
+            git reset --hard HEAD
+            git clean -fdx
+            mkdir -p "$(dirname "$result")"
+            evidence="$(
+              {
+                printf 'QA runner exit status: %s\n' "$status"
+                tail -c 8000 "$log" 2>/dev/null || true
+              } | tr -d '\000'
+            )"
+            jq -n \
+              --arg sha "${{ inputs.candidate_sha }}" \
+              --arg url "${{ inputs.candidate_url }}" \
+              --arg evidence "$evidence" \
+              '{
+                passed: false,
+                testedCommitSha: $sha,
+                environmentUrl: $url,
+                qaPlanCommitSha: "${{ inputs.qa_plan_commit_sha }}",
+                qaPlanHash: "${{ inputs.qa_plan_hash }}",
+                summary: "Independent QA execution was blocked before a valid result was produced.",
+                defects: [],
+                testGaps: [],
+                evidence: [$evidence],
+                bugfixResults: [],
+                scenarios: []
+              }' >"$result"
+          fi
+
+          jq . "$result"
+
+      - name: Commit immutable QA evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          result="$ARTIFACT_ROOT/runtime/qa-result.json"
+          test -f "$result"
+          git config user.name "AIDelivery Hub"
+          git config user.email "aidelivery-hub@users.noreply.github.com"
+          git add --force "$result"
+          git commit -m "Record independent QA execution"
+          git push \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "HEAD:${{ inputs.qa_evidence_branch }}"

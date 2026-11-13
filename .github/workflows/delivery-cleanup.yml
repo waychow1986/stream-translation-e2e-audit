@@ -1,0 +1,91 @@
+name: Delivery Cleanup
+
+on:
+  workflow_dispatch:
+    inputs:
+      delivery_id:
+        description: Delivery identifier
+        required: true
+        type: string
+      postgres_database:
+        description: Delivery PostgreSQL database
+        required: false
+        type: string
+      postgres_role:
+        description: Delivery PostgreSQL role
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cleanup:
+    name: Cleanup test database
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Validate cleanup inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${{ inputs.delivery_id }}"
+          database="${{ inputs.postgres_database }}"
+          role="${{ inputs.postgres_role }}"
+          if [[ -n "$database" || -n "$role" ]]; then
+            [[ "$database" =~ ^[A-Za-z0-9_]+$ ]]
+            [[ "$role" =~ ^[A-Za-z0-9_]+$ ]]
+          fi
+
+      - name: Sign in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Remove Delivery database resources
+        if: inputs.postgres_database != '' || inputs.postgres_role != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-client
+
+          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          firewall_rule="gha-cleanup-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup_firewall() {
+            status=$?
+            az postgres flexible-server firewall-rule delete \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+              --name "$firewall_rule" \
+              --yes \
+              --output none || {
+                if (( status == 0 )); then status=1; fi
+              }
+            exit "$status"
+          }
+          trap cleanup_firewall EXIT
+
+          az postgres flexible-server firewall-rule create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --server-name "${{ vars.AZURE_POSTGRES_SERVER }}" \
+            --name "$firewall_rule" \
+            --start-ip-address "$runner_ip" \
+            --end-ip-address "$runner_ip" \
+            --output none
+
+          export PGPASSWORD="$(
+            az account get-access-token \
+              --resource https://ossrdbms-aad.database.windows.net \
+              --query accessToken \
+              --output tsv
+          )"
+          admin_connection="host=${{ vars.AZURE_POSTGRES_HOST }} port=5432 dbname=postgres user=${{ vars.AZURE_POSTGRES_ADMIN_USER }} sslmode=require"
+          psql "$admin_connection" \
+            --set ON_ERROR_STOP=1 \
+            --command \
+              "DROP DATABASE IF EXISTS \"${{ inputs.postgres_database }}\" WITH (FORCE)" \
+            --command "DROP ROLE IF EXISTS \"${{ inputs.postgres_role }}\""
