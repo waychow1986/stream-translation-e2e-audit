@@ -1,0 +1,34 @@
+{
+  "name": "stream-translation-e2e-audit",
+  "version": "1.0.0",
+  "description": "AIDelivery Hub generated application: 企业实时翻译 E2E 审计",
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspace @stream-translation/web && npm run build --workspace @stream-translation/server",
+    "test:list": "vitest list --passWithNoTests && playwright test --list --pass-with-no-tests --project=integration --project=functional --project=e2e"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/waychow1986/stream-translation-e2e-audit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/server",
+    "packages/contracts"
+  ],
+  "devDependencies": {
+    "@playwright/test": "1.65.0",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
