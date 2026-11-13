@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0007",
+  "stage": "specification.gate",
+  "outcome": "repair",
+  "summary": "Specification 忠实覆盖已批准 Intent，但遗漏了 Constitution 明确规定的 Playwright 端到端验证治理约束及其来源分类，尚不能通过门禁。",
+  "artifacts": [],
+  "findings": [
+    {
+      "id": "SPEC-GOV-001",
+      "severity": "high",
+      "owner": "specification",
+      "route": "current_stage",
+      "summary": "测试策略与 IQA 场景虽要求端到端黑盒验证，却未纳入 Constitution 强制要求的 Playwright，也未将该验证义务标注为 governance 来源。",
+      "recommendation": "在不改变产品行为与验收范围的前提下，将 Playwright 明确为端到端功能验证的治理约束，并在测试策略及相关 IQA 来源追踪中准确标注 Constitution 的 governance 来源。"
+    }
+  ]
+}
