@@ -7,7 +7,7 @@ export function createAzureFoundryTranslator(config: AppConfig): FoundryTranslat
   const credential = new DefaultAzureCredential({ managedIdentityClientId: config.azureClientId });
   const project = new AIProjectClient(config.foundryProjectEndpoint, credential);
   return new FoundryTranslator(async (request, onDelta) => {
-    const openAI = await project.getAzureOpenAIClient();
+    const openAI = await project.getAzureOpenAIClient({ apiVersion: "2025-04-01-preview" });
     const pending = openAI.chat.completions.create({
       model: config.modelDeployment,
       messages: [
