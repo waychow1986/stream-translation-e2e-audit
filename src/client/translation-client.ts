@@ -24,6 +24,7 @@ export class TranslationClient {
   private readonly createSocket: (url: string) => ClientSocket;
   private readonly webSocketUrl?: string;
   private cleanupPromise?: Promise<void>;
+  private terminalEventReceived = false;
 
   constructor(
     private readonly onEvent: (event: ServerEvent) => void,
@@ -41,6 +42,7 @@ export class TranslationClient {
 
   async start(): Promise<void> {
     this.cleanupPromise = undefined;
+    this.terminalEventReceived = false;
     this.onStatus("正在启动");
     const protocol = typeof location !== "undefined" && location.protocol === "https:" ? "wss:" : "ws:";
     const url = this.webSocketUrl ?? `${protocol}//${location.host}/ws/translation`;
@@ -55,8 +57,10 @@ export class TranslationClient {
           if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(frame);
         });
       } else if (event.type === "session.stopped") {
+        this.terminalEventReceived = true;
         this.onStatus("已停止");
       } else if (event.type === "session.failed") {
+        this.terminalEventReceived = true;
         await this.cleanupCapture();
         this.onStatus("本次会话已结束");
       }
@@ -98,6 +102,6 @@ export class TranslationClient {
 
   private async handleConnectionEnd(): Promise<void> {
     await this.cleanupCapture();
-    this.onStatus("本次会话已结束");
+    if (!this.terminalEventReceived) this.onStatus("本次会话已结束");
   }
 }

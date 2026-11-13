@@ -41,7 +41,10 @@ export async function registerTranslationWebSocket(
       return;
     }
     const send = (event: ServerEvent) => {
-      if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(event));
+      if (socket.readyState !== socket.OPEN) return;
+      socket.send(JSON.stringify(event));
+      if (event.type === "session.stopped") socket.close(1000, "Session stopped");
+      if (event.type === "session.failed") socket.close(1011, "Session failed");
     };
     const session = new TranslationSession(adapterFactory(), send);
     active.set(socket, session);

@@ -77,6 +77,27 @@ describe("server resource cleanup", () => {
     expect(adapters).toHaveLength(2);
   });
 
+  it("releases the WebSocket after a normal stop", async () => {
+    const app = await buildApp(testConfig());
+    apps.push(app);
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const socket = new WebSocket(address.replace("http", "ws") + "/ws/translation", {
+      headers: { Origin: address }
+    });
+    await once(socket, "open");
+    socket.send(JSON.stringify({
+      type: "start",
+      protocolVersion: 1,
+      audio: { encoding: "pcm_s16le", sampleRate: 16_000, channels: 1 }
+    }));
+    await once(socket, "message");
+    socket.send(JSON.stringify({ type: "stop" }));
+    const [data] = await once(socket, "message");
+    expect(JSON.parse(data.toString())).toEqual({ type: "session.stopped" });
+    const [code] = await once(socket, "close");
+    expect(code).toBe(1000);
+  });
+
   it("drives SIGTERM and closes an active WebSocket before the process exits", async () => {
     const port = await availablePort();
     const child = spawn(process.execPath, ["--import", "tsx", "src/server/index.ts"], {
