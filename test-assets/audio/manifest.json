@@ -1,0 +1,41 @@
+{
+  "sampleRate": 16000,
+  "format": "PCM signed 16-bit mono",
+  "assets": [
+    {
+      "file": "en-stream.wav",
+      "text": "hello world",
+      "language": "en-US",
+      "segments": 1,
+      "durationSeconds": 4.0
+    },
+    {
+      "file": "en-two-segments.wav",
+      "text": "hello world | welcome back",
+      "language": "en-US",
+      "segments": 2,
+      "durationSeconds": 8.0
+    },
+    {
+      "file": "en-continuous-15s.wav",
+      "text": "this continuous English sample lasts at least fifteen seconds",
+      "language": "en-US",
+      "segments": 1,
+      "durationSeconds": 16.0
+    },
+    {
+      "file": "zh-stream.wav",
+      "text": "你好世界",
+      "language": "zh-CN",
+      "segments": 1,
+      "durationSeconds": 4.0
+    },
+    {
+      "file": "multi-segment.wav",
+      "text": "one | two | three | four | five | six | seven | eight | nine | ten | eleven | twelve",
+      "language": "mixed",
+      "segments": 12,
+      "durationSeconds": 18.0
+    }
+  ]
+}

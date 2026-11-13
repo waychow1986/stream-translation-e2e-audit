@@ -1,0 +1,13 @@
+.git
+.github
+.ai-delivery
+node_modules
+dist
+coverage
+test-results
+playwright-report
+references
+tests
+test-assets
+*.log
+.env*

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0021-b01",
+  "stage": "coding",
+  "outcome": "passed",
+  "summary": "已完成全部 28 项 Coding 任务及本地必要验证，真实 Azure 与部署证据按责任矩阵交由下游产生。",
+  "artifacts": [
+    { "path": "package.json" },
+    { "path": "package-lock.json" },
+    { "path": "tsconfig.json" },
+    { "path": "vite.config.ts" },
+    { "path": "playwright.config.ts" },
+    { "path": "index.html" },
+    { "path": "src/" },
+    { "path": "tests/" },
+    { "path": "test-assets/" },
+    { "path": "Dockerfile" },
+    { "path": ".dockerignore" },
+    { "path": ".ai-delivery/features/003-v1/runtime/deployment.json" },
+    { "path": ".ai-delivery/features/003-v1/runtime/developer-functional-run.sh" },
+    { "path": ".ai-delivery/features/003-v1/tasks-implementation.md" },
+    { "path": ".ai-delivery/features/003-v1/reports/implementation.md" },
+    { "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0021-b01.json" }
+  ],
+  "progress": {
+    "completedTaskIds": [
+      "T001", "T002", "T003", "T004", "T005", "T006", "T007",
+      "T008", "T009", "T010", "T011", "T012", "T013", "T014",
+      "T015", "T016", "T017", "T018", "T019", "T020", "T021",
+      "T022", "T023", "T024", "T025", "T026", "T027", "T028"
+    ],
+    "blockedTaskIds": []
+  }
+}
