@@ -137,3 +137,58 @@
 ### 实施结论
 
 完成本次有界 Coding 批次的 `T004`～`T007` 及 19 个聚焦测试、clean build、类型检查和本地 BFF smoke 验证；未执行或声称完成后续用户故事、真实 Azure 集成、runtime Candidate 制品或下游门禁。
+
+## Coding Session coding-attempt-01-batch-03-operation-029
+
+### 实施范围
+
+本 Session 读取并核对下一依赖就绪阶段 Phase 3 的 `T008`～`T015`。`T010` 要求提交十个“获准且不含会议正文或敏感语音”的真实语言短句音频及其批准 manifest，且 `T013` 明确依赖 `T008`～`T012` 全部完成。当前仓库和 Session 输入均未提供任何获准语音资产、批准记录或可据此生成这些输入的权威来源；编排同时明确禁止在 Coding 环境制造“approved load inputs”。因此本 Session 未伪造音频、批准状态或远程 Azure 结果，未越过依赖实施 `T013`～`T015`，也未更新任何任务 checkbox。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `.ai-delivery/features/001-delivery-dlv-20261113-34459c0347ba/reports/implementation.md` | 追加当前 Session 的 Phase 3 输入阻塞与真实检查证据；历史内容保持不变 | T010、Phase 3 依赖关系 |
+
+### 需求与场景覆盖
+
+| Intent / Specification Scenario | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| IQA-002、IQA-003 / AC-002、AC-003 / T010 | 无新增生产实现 | 计划路径 `tests/e2e/integration/speech-lid.spec.ts` 与 `tests/e2e/assets/` 当前不存在 | 阻塞；缺少获准非敏感语音输入，未制造或把替代输入表述为已批准证据 |
+| US-002 / FR-002、FR-003 / T008～T015 | 无新增生产实现 | 无新增测试 | 未开始；T013 依赖 T008～T012，不能绕过未完成的 T010 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `git status --short && git diff --name-status fa4a656f6036f444f25255667522f99201abc6b0...HEAD && git log -3 --oneline` | Coding workspace | 通过 | Session 开始时工作树无变更，`HEAD` 为不可变 base `fa4a656f6036f444f25255667522f99201abc6b0` |
+| `wc -l ... && grep ... tasks-implementation.md` | Coding workspace | 通过 | 已确认批准制品、阶段门禁和 33 项任务账本存在 |
+| `find tests apps packages -type f -print \| sort; find . -maxdepth 3 -type f \( -name '*.wav' -o -name '*.mp3' \) -print` | Coding workspace | 检查完成，首个 `find` 报告 `tests` 不存在 | 列出了现有 `apps/` 与 `packages/` 文件；仓库中未发现 `.wav` 或 `.mp3` 语音资产，`tests/e2e/assets/` 尚不存在 |
+| `npm ci` | Coding workspace | 通过 | 依据锁文件安装 195 个 package；audit 报告 0 个 vulnerability |
+| `npm run typecheck` | Coding workspace | 通过 | web、server、contracts 三个 workspace 均以退出码 0 完成 |
+| `npm run build` | Coding workspace | 通过 | contracts、Vite SPA 与 Fastify BFF 构建成功 |
+| `npm test` | Coding workspace | 通过 | 3 个测试文件、19 个既有测试全部通过 |
+| `npx playwright test --project=integration --pass-with-no-tests` | Coding workspace | 命令通过但无场景 | 当前为 0 个 integration test；不主张真实集成行为通过 |
+| `npx playwright test --project=functional --pass-with-no-tests` | Coding workspace | 命令通过但无场景 | 当前为 0 个 functional test；不主张用户行为通过 |
+| `npm run test:list` | Coding workspace | 通过 | 发现 19 个 Vitest 测试；Playwright integration、functional、E2E 共 0 个测试 |
+| `node --check apps/server/dist/index.js` | Coding workspace | 通过 | 构建后的 BFF 入口语法检查退出码 0 |
+
+### Runtime 与下游门禁就绪制品
+
+- 本 Session 未修改 runtime 制品。Phase 2 已有的 BFF health、Candidate identity 与构建基础保持不变。
+- Phase 3 的真实 Speech integration 场景、候选语言 UI、recognizer adapter 以及后续 `Dockerfile`、`runtime/deployment.json` 和开发者 functional 脚本仍未就绪。
+
+### 延后平台证据
+
+- 真实 Azure Speech continuous LID、token 获取/刷新失败、检测越界及多语言结果仍必须由获准 integration 环境、身份和已批准非敏感语音输入产生。
+- Candidate 最终 SHA、image digest、远程 deployment/QA target、CI、Independent QA、UAT、发布审批、Review 与 Merge 证据继续由下游平台阶段产生。
+
+### 限制、剩余风险与阻塞项
+
+- **阻塞项：** 缺少 T010 所要求的十个获准非敏感语音文件及其批准来源。必需纠正措施是由获授权人员或平台提供可提交到任务所列准确路径的批准音频及每项对应的 BCP 47 tag、非正文 `contentId`；Coding 才能据此建立 manifest、场景和输入校验。
+- 在该输入到位前，不能真实证明 Chromium 麦克风文件注入可取得对应检测 tag，也不能把合成音频、任意下载内容、mock、health check 或无音频的测试发现当作 T010 通过。
+- T013 依赖 T008～T012；为保持测试先行和批准依赖顺序，本 Session 未提前实现语言目录/token endpoint、候选选择 UI 或 Speech recognizer。
+
+### 实施结论
+
+阻塞。本 Session 未完成或勾选 T008～T015；已提交可复核的输入缺口与必需纠正措施，未制造获准测试输入、凭据、部署 URL、外部身份或下游成功证据。
