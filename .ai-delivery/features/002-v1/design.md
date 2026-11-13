@@ -66,7 +66,7 @@ Coding 获准创建或修改的仓库根路径如下：
 
 `src/client/` 包含 React 页面、AudioWorklet、WebSocket client、字幕 reducer 与样式；`src/server/` 包含 Fastify 启动、健康/身份路由、WebSocket session、Speech/Foundry adapters 与配置校验；`src/shared/` 包含协议 schema 和共享类型。`tests/unit/` 验证状态机与排序，`tests/contract/` 验证 adapters 和协议，`tests/e2e/` 放置本地 Playwright 场景，`tests/fixtures/audio/iqa-en-multisegment.wav` 保存可重复的合成英语音频，`tests/fixtures/audio/iqa-en-multisegment.json` 保存片段时间、英文原意及可自动判定的中文概念词组。
 
-构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。平台运行契约文件位于 active Feature 的 `runtime/deployment.json` 与 `runtime/qa-run.sh`，其内容必须引用本节授权的根路径，所需音频和语义清单固定来自 `tests/fixtures/audio/`。
+构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。所需音频和语义清单固定来自 `tests/fixtures/audio/`。
 
 ## 数据流、状态、并发与生命周期
 
