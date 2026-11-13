@@ -69,3 +69,71 @@
 ## 实施结论
 
 完成本次有界 Coding 批次的 `T001`～`T003` 及其聚焦验证；未执行或声称完成后续用户故事、runtime、远程验证或下游门禁。
+
+## Coding Session coding-attempt-01-batch-02-operation-028
+
+### 实施范围
+
+本 Session 按依赖顺序完成 Phase 2 的 `T004`～`T007`，共 4 个任务。先创建共享 contract 与 Fastify contract test 并记录缺少实现时的预期失败，再实现 provider 无关错误/SSE 基础契约、严格配置校验、同源与 Content-Type 校验、安全响应头、脱敏结构化日志、静态 SPA 服务、独立 live/ready 和平台 Candidate identity 路由。未提前实施 Phase 3 或任何 Azure provider 调用。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `packages/contracts/src/base.contract.test.ts` | 覆盖稳定错误 schema 成功与拒绝、兼容字段剥离、正文排除、SSE 编解码和帧注入拒绝 | T004 |
+| `packages/contracts/src/base.ts`、`packages/contracts/src/index.ts` | 实现并导出错误码、阶段、错误 envelope 与 provider 无关 SSE 基础帧 | T005 |
+| `packages/contracts/package.json`、`packages/contracts/tsconfig.json` | 发布共享入口并将生产源码纳入独立类型检查和构建 | T005 |
+| `apps/server/src/app.contract.test.ts`、`apps/server/src/config.test.ts` | 覆盖配置拒绝、readiness 503、live 独立性、同源与 Content-Type 拒绝、CSP、安全头、静态 SPA、日志脱敏和 Candidate identity | T006 |
+| `apps/server/src/app.ts`、`apps/server/src/config.ts`、`apps/server/src/logging.ts`、`apps/server/src/routes/health.ts`、`apps/server/src/index.ts` | 建立 Fastify 应用壳、配置校验、安全边界、静态资源、脱敏日志与健康路由 | T007 |
+| `apps/server/package.json`、`apps/server/tsconfig.json`、`package-lock.json` | 声明 BFF 对共享 contracts workspace 的依赖并纳入生产源码类型检查 | T005、T007 |
+| `package.json` | 使 clean build 先构建共享 contracts，再构建 web 与 server，确保 BFF runtime import 存在 | T005、T007 |
+| `.ai-delivery/features/001-delivery-dlv-20261113-34459c0347ba/tasks-implementation.md` | 仅将已有实现且聚焦验证通过的 T004～T007 checkbox 更新为完成 | T004～T007 |
+
+### 需求与场景覆盖
+
+| Intent / Specification Scenario | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| Constitution 三、design.md“错误契约” / 共享错误与 SSE 基础契约 | `packages/contracts/src/base.ts` | `packages/contracts/src/base.contract.test.ts` | 通过；稳定 code/stage、schema 拒绝、兼容字段和无正文输出均有断言 |
+| TD-001、TD-004 / BFF 启动与配置安全边界 | `apps/server/src/config.ts`、`apps/server/src/app.ts` | `apps/server/src/config.test.ts`、`apps/server/src/app.contract.test.ts` | 通过；缺失或无效配置不 ready，同源和 JSON Content-Type 约束可观察 |
+| design.md“安全、隐私、身份与 Secret” / CSP 与正文脱敏 | `apps/server/src/app.ts`、`apps/server/src/logging.ts` | `apps/server/src/app.contract.test.ts` | 通过；响应头和日志排除正文、凭据、Authorization 与 stack |
+| design.md“配置、可观测性与运维” / live、ready 与静态 SPA | `apps/server/src/routes/health.ts`、`apps/server/src/app.ts` | `apps/server/src/app.contract.test.ts` | 通过；live 不调用依赖，ready 仅依据本地配置与静态资源，不伪造 Azure 可用性 |
+| 平台 runtime contract / Candidate identity | `apps/server/src/routes/health.ts` | `apps/server/src/app.contract.test.ts` | 通过；仅从 `AIDELIVERY_DELIVERY_ID` 与 `AIDELIVERY_CANDIDATE_SHA` 返回身份，缺失时 503，无 fallback |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| 初次 `npm test -- --run packages/contracts/src/base.contract.test.ts apps/server/src/config.test.ts apps/server/src/app.contract.test.ts` | Coding workspace，测试先行 | 预期失败 | 3 个 suite 均因 `base.js`、`config.js`、`app.js` 尚不存在而失败，证明测试先于生产实现执行 |
+| `npm ci` | Coding workspace，clean lockfile install | 通过 | 安装 195 个 package；audit 报告 0 个 vulnerability |
+| `npm run typecheck` | Coding workspace | 通过 | web、server、contracts 三个 workspace 均以退出码 0 完成 |
+| `npm run build` | Coding workspace，先删除三个 workspace 的 `dist` | 通过 | contracts、Vite SPA、Fastify BFF 均从 clean production 输出构建成功 |
+| `npm test` | Coding workspace | 通过 | 3 个测试文件、19 个 contract/focused test 全部通过 |
+| `npx playwright test --project=integration --pass-with-no-tests` | Coding workspace | 命令通过但当前无场景 | Phase 2 尚未到 T010、T018、T025；0 个 integration test，不主张真实集成行为通过 |
+| `npx playwright test --project=functional --pass-with-no-tests` | Coding workspace | 命令通过但当前无场景 | Phase 2 尚未到 T011、T019、T026；0 个 functional test，不主张用户流程通过 |
+| `npm run test:list` | Coding workspace | 通过 | 发现 19 个 Vitest 测试；Playwright 当前报告 0 个场景，后续批准任务负责创建 |
+| `node --check apps/server/dist/index.js` | Coding workspace | 通过 | 构建后的 BFF 入口语法检查退出码 0 |
+| 本地启动 `node apps/server/dist/index.js` 后请求 `/health/live`、`/health/ready`、`/candidate-identity` | Coding workspace，非敏感占位配置 | 通过 | 依次返回 `{"status":"live"}`、`{"status":"ready"}`、`{"deliveryId":"DLV-test","candidateSha":"candidate-test"}` |
+| `npm audit --omit=dev` | Coding workspace | 通过 | `found 0 vulnerabilities` |
+| `git diff --check aa56c9de9e087edf573f2479e7d6fb103e08774a` | Coding workspace | 通过 | 无空白错误 |
+
+### Runtime 与下游门禁就绪制品
+
+- BFF 已具备独立 `/health/live`、`/health/ready` 和 `/candidate-identity`；readiness 只报告本地配置和静态资源状态，不把未调用的 Azure 依赖伪装为 ready 证据。
+- clean build 已生成共享 contracts、SPA 和 BFF production 输出；当前还未到 Phase 6，因此未创建或声称 `Dockerfile`、`runtime/deployment.json` 和开发者 functional 脚本就绪。
+- Playwright integration、functional 与 E2E 项目入口仍可执行和发现；真实场景由后续测试先行任务创建。
+
+### 延后平台证据
+
+- 真实 Azure Speech、Foundry、完整 Playwright 用户流程及 Independent QA 结果依赖后续批准任务、获准 integration 身份、非敏感语音资产和部署目标；本 Session 未制造或声称这些结果。
+- Candidate 最终 SHA、image digest、远程 deployment/QA target、CI、Independent QA、UAT、发布审批、Review 与 Merge 证据均由后续平台阶段产生。
+
+### 限制、剩余风险与阻塞项
+
+- 当前 Phase 2 仅建立共享协议和 BFF 基础边界，尚无语言目录/token、Speech recognizer、运行状态机或 Foundry 翻译行为。
+- Playwright integration 与 functional 项目在本 Session 仍为 0 个场景；命令成功只证明配置可加载，不是用户行为或真实 Azure 通过证据。
+- 语言目录本批只执行启动所需的 JSON 非空数组基础校验；BCP 47 tag、唯一性、enabled 条目及完整目录 schema 按依赖顺序属于 T008、T013。
+- 本 Session 无阻塞项。下一依赖就绪阶段为 Phase 3 的测试任务 T008～T012，仍须先创建测试与真实环境可执行入口，再实施 T013～T015。
+
+### 实施结论
+
+完成本次有界 Coding 批次的 `T004`～`T007` 及 19 个聚焦测试、clean build、类型检查和本地 BFF smoke 验证；未执行或声称完成后续用户故事、真实 Azure 集成、runtime Candidate 制品或下游门禁。

@@ -25,10 +25,10 @@
 
 ## Phase 2：Foundational
 
-- [ ] T004 [P] 为共享错误 envelope、稳定错误码、SSE 基础帧和禁止正文进入错误输出编写 contract test（`packages/contracts/src/base.contract.test.ts`；来源：design.md“错误契约”、Constitution 三；依赖：T003；证据：测试覆盖 schema 成功/拒绝、未知字段兼容和无 transcript/subtitle/provider 正文）
-- [ ] T005 实现 provider 无关的共享 schema、稳定错误类型与 SSE 编解码基础，并导出给 SPA/BFF 使用（`packages/contracts/src/base.ts`、`packages/contracts/src/index.ts`；来源：design.md“Interface 与契约”、TD-001；依赖：T004；证据：T004 通过且 contracts 包可独立类型检查）
-- [ ] T006 [P] 为启动配置校验、Origin/Content-Type/CSP 安全头、正文脱敏日志、静态 SPA 服务及 live/ready 语义编写 Fastify contract test（`apps/server/src/app.contract.test.ts`、`apps/server/src/config.test.ts`；来源：design.md“安全、隐私、身份与 Secret”“配置、可观测性与运维”；依赖：T003、T005；证据：测试覆盖无效配置 readiness 503、同源拒绝、安全头及日志不含正文和凭据）
-- [ ] T007 建立 Fastify 应用壳、严格启动配置、同源校验、脱敏结构化日志、静态资源和独立 live/ready 路由，不调用外部依赖伪造 readiness（`apps/server/src/app.ts`、`apps/server/src/config.ts`、`apps/server/src/logging.ts`、`apps/server/src/routes/health.ts`、`apps/server/src/index.ts`；来源：TD-001、TD-004、design.md“配置、可观测性与运维”；依赖：T006；证据：T006 通过，错误响应和日志无会议正文、token、key、Authorization 或 stack trace）
+- [x] T004 [P] 为共享错误 envelope、稳定错误码、SSE 基础帧和禁止正文进入错误输出编写 contract test（`packages/contracts/src/base.contract.test.ts`；来源：design.md“错误契约”、Constitution 三；依赖：T003；证据：测试覆盖 schema 成功/拒绝、未知字段兼容和无 transcript/subtitle/provider 正文）
+- [x] T005 实现 provider 无关的共享 schema、稳定错误类型与 SSE 编解码基础，并导出给 SPA/BFF 使用（`packages/contracts/src/base.ts`、`packages/contracts/src/index.ts`；来源：design.md“Interface 与契约”、TD-001；依赖：T004；证据：T004 通过且 contracts 包可独立类型检查）
+- [x] T006 [P] 为启动配置校验、Origin/Content-Type/CSP 安全头、正文脱敏日志、静态 SPA 服务及 live/ready 语义编写 Fastify contract test（`apps/server/src/app.contract.test.ts`、`apps/server/src/config.test.ts`；来源：design.md“安全、隐私、身份与 Secret”“配置、可观测性与运维”；依赖：T003、T005；证据：测试覆盖无效配置 readiness 503、同源拒绝、安全头及日志不含正文和凭据）
+- [x] T007 建立 Fastify 应用壳、严格启动配置、同源校验、脱敏结构化日志、静态资源和独立 live/ready 路由，不调用外部依赖伪造 readiness（`apps/server/src/app.ts`、`apps/server/src/config.ts`、`apps/server/src/logging.ts`、`apps/server/src/routes/health.ts`、`apps/server/src/index.ts`；来源：TD-001、TD-004、design.md“配置、可观测性与运维”；依赖：T006；证据：T006 通过，错误响应和日志无会议正文、token、key、Authorization 或 stack trace）
 
 ## Phase 3：US2 - 为会议设置候选源语言并自动检测
 
