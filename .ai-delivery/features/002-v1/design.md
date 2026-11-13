@@ -109,7 +109,7 @@ WebSocket `GET /ws/translation` 使用 JSON control/event 与 binary audio frame
 
 ## 配置、可观测性与运维
 
-必需环境变量为 `PORT`（镜像默认 `3000`）、`AIDELIVERY_DELIVERY_ID`、`AIDELIVERY_CANDIDATE_SHA`、`AZURE_CLIENT_ID`、`AZURE_SPEECH_ENDPOINT`、`AZURE_AI_PROJECT_ENDPOINT`（兼容读取平台同时提供的 `FOUNDRY_PROJECT_ENDPOINT`，两者同时存在且不一致则启动失败）及 `AZURE_AI_MODEL_DEPLOYMENT_NAME`。目标语言、协议版本、音频格式、语言检测候选和 reasoning 关闭均为代码内受测不变量，不允许环境变量扩大产品范围。
+必需环境变量为 `PORT`（镜像默认 `3000`）、`AIDELIVERY_DELIVERY_ID`、`AIDELIVERY_CANDIDATE_SHA`、`AZURE_CLIENT_ID`、`AZURE_SPEECH_ENDPOINT`、`AZURE_AI_PROJECT_ENDPOINT`（兼容读取平台同时提供的 `FOUNDRY_PROJECT_ENDPOINT`，两者同时存在且不一致则启动失败）及 `AZURE_AI_MODEL_DEPLOYMENT_NAME`；该 deployment 必须由环境指向已批准的 gpt-sol-6.1，不允许应用静默改用其他模型。目标语言、协议版本、音频格式、语言检测候选和 reasoning 关闭均为代码内受测不变量，不允许环境变量扩大产品范围。仅测试进程允许显式 `APP_ADAPTER_MODE=deterministic`；生产构建或非 `NODE_ENV=test` 收到该值必须拒绝启动，防止 fake adapter 进入候选部署。
 
 stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentId、状态、依赖名、调用结果分类和错误码；不输出正文、音频、token、endpoint query 或完整 Azure 异常。核心事件包括启动配置结果、会话状态转换、Speech/Foundry 调用开始与结束、取消、资源释放和健康状态。平台未提供 telemetry backend 或告警系统，设计不新增外部观测产品；候选日志仅用于故障关联。
 
@@ -123,7 +123,7 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 
 多阶段根目录 Dockerfile 在 Node.js 22 镜像中执行锁文件安装、类型检查和构建，runtime stage 仅安装生产依赖、复制 server 与静态资源，以 `USER 10001` 启动 `node` 进程并暴露 `3000`。镜像不得包含源码测试输出、凭据或本地环境文件。
 
-`runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。`developerSetupCommands` 使用 `npm ci --ignore-scripts`；验证命令分类固定为：`staticAnalysis` 执行类型检查，`build` 执行生产构建，`developerTests` 执行单元测试，`integrationTests` 执行 adapter/协议 contract test，`functionalTests` 执行本地 Playwright 完整流式场景。
+`runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。`developerSetupCommands` 固定为 `npm ci --ignore-scripts`；`developerValidationCommands` 固定分类为：`staticAnalysis` 执行 `npm run typecheck`，`build` 执行 `npm run build`，`developerTests` 执行 `npm run test:unit`，`integrationTests` 执行 `npm run test:contract`，`functionalTests` 执行 `bash tests/scripts/developer-functional.sh`。该脚本启动显式 deterministic adapter 的测试进程并执行 `npm run test:e2e`，同时须通过 `bash -n`。
 
 平台以不可变 candidate SHA 构建镜像并部署到交付命名空间，LoadBalancer 80 转发容器 3000。应用无 schema 和持久化迁移，故无 migration command。Rollout 以 `/healthz` 与 `/candidate-identity` 通过为最低部署条件；真实功能通过 Independent QA 判定。失败时把 Service/Deployment 恢复到上一已知通过的不可变镜像；活动会话会终止，用户需手动重新开始，不执行数据回滚。
 
@@ -138,7 +138,7 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 | IQA-001～IQA-003 真实完整流程 | Independent QA | 候选 AKS 公网地址、真实 Azure Speech/Foundry | QA OIDC、Azure CLI、Speech/Foundry 环境变量、合成英语音频 | `qa-run.sh` 与 Playwright 黑盒断言、结果 JSON schema 测试 | 发言期间字幕进展、自动检测英语、中文语义/顺序与实际依赖关联证据 |
 | 发布回归 | release verification | 已批准候选镜像和目标运行环境 | 目标环境 Workload Identity | 已通过候选与 Independent QA 的不可变 SHA | 发布后 health/identity 及必要完整流程结果；不替代前述 IQA |
 
-Independent QA 的 `runtime/qa-run.sh` 在空临时目录使用 Azure CLI/OIDC 合成或取得含多个明确语义片段的英语 WAV，以 Chromium fake audio capture 注入麦克风，调用 `QA_BASE_URL` 完成 Playwright 黑盒流程，并把唯一输出写到 `QA_RESULT_PATH`。结果严格包含平台规定字段、IQA-001～003 三个 scenario、真实服务名称与非敏感证据；不修改仓库工作区。
+Independent QA 的 `runtime/qa-run.sh` 在空临时目录使用 Azure CLI/OIDC 合成或取得含多个明确语义片段的英语 WAV，以 Chromium fake audio capture 注入麦克风，调用 `QA_BASE_URL` 完成 Playwright 黑盒流程，并把唯一输出写到 `QA_RESULT_PATH`。由于候选入口按平台约束是 HTTP 公网 IP，QA Chromium 必须仅对该精确 `QA_BASE_URL` 使用 `--unsafely-treat-insecure-origin-as-secure` 以启用测试麦克风；此开关只属于候选测试，不进入应用或生产配置，正式用户入口仍须由部署环境提供浏览器认可的 HTTPS。结果严格包含平台规定字段、IQA-001～003 三个 scenario、真实服务名称与非敏感证据；不修改仓库工作区。
 
 ## 快速验证指南（Quickstart）
 
