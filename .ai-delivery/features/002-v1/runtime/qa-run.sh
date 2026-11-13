@@ -119,10 +119,17 @@ synthesizer.speakSsmlAsync(
         const cancellation = sdk.CancellationDetails.fromResult(result);
         throw new Error(
           `Speech synthesis did not complete: reason=${result.reason}, ` +
-          `cancellation=${cancellation.reason}, code=${cancellation.ErrorCode}`
+          `cancellation=${cancellation.reason}, code=${cancellation.errorCode}, ` +
+          `details=${cancellation.errorDetails || "none"}`
         );
       }
-      fs.writeFileSync(process.env.QA_AUDIO_PATH, Buffer.from(result.audioData));
+      const audio = Buffer.from(result.audioData);
+      if (audio.length <= 44 ||
+          audio.toString("ascii", 0, 4) !== "RIFF" ||
+          audio.toString("ascii", 8, 12) !== "WAVE") {
+        throw new Error("Speech synthesis returned an empty or invalid WAV payload");
+      }
+      fs.writeFileSync(process.env.QA_AUDIO_PATH, audio);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -143,6 +150,11 @@ then
   exit 0
 fi
 unset speech_token
+
+if [[ ! -s "${audio_path}" ]]; then
+   write_environment_failure "测试素材生成前置失败：Azure Speech SDK 未写出非空合成 WAV。"
+   exit 0
+fi
 
 node <<'NODE'
 const fs = require("node:fs");
