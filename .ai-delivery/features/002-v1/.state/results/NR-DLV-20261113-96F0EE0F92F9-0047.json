@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0047",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已加固 Azure Speech SDK 合成语音的完成状态、诊断信息与 WAV 有效性校验，避免无效测试素材进入验收流程。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/runtime/qa-run.sh"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0047.json"
+    }
+  ]
+}
