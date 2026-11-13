@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0022-b01",
+  "stage": "coding",
+  "outcome": "passed",
+  "summary": "现有全部 Coding 任务已完成并通过本次必要本地重验，真实 Azure 与部署证据按责任矩阵交由下游产生。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/reports/implementation.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0022-b01.json"
+    }
+  ],
+  "progress": {
+    "completedTaskIds": [],
+    "blockedTaskIds": []
+  }
+}
