@@ -62,9 +62,9 @@ Coding 获准创建或修改的仓库根路径仅限以下项目符号列出的�
 
 `src/client/` 包含 React 页面、AudioWorklet、WebSocket client、字幕 reducer 与样式；`src/server/` 包含 Fastify 启动、健康/身份路由、WebSocket session、Speech/Foundry adapters 与配置校验；`src/shared/` 包含协议 schema 和共享类型。`tests/unit/` 验证状态机与排序，`tests/contract/` 验证 adapters 和协议，`tests/e2e/` 放置本地 Playwright 场景，`tests/fixtures/audio/iqa-en-multisegment.wav` 保存可重复的合成英语音频，`tests/fixtures/audio/iqa-en-multisegment.json` 保存片段时间、英文原意及可自动判定的中文概念词组。
 
-构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 通过 `.dockerignore` 排除这些输出、Git 元数据和本地环境文件。所需音频和语义清单固定来自 `tests/fixtures/audio/`。
+构建输出 `dist/`、测试输出 `test-results/`、Playwright 报告 `playwright-report/`、coverage 与 `node_modules/` 必须写入 `.gitignore`；Docker build context 必须排除这些输出、Git 元数据和本地环境文件。所需音频和语义清单固定来自 `tests/fixtures/audio/`。
 
-根目录 `Dockerfile`、`.dockerignore`、包管理文件以及 `.ai-delivery/features/002-v1/runtime/deployment.json`、`.ai-delivery/features/002-v1/runtime/developer-functional-run.sh` 由平台另行固定授权 Coding，不属于上述代码路径清单；`.ai-delivery/features/002-v1/runtime/qa-run.sh` 由 Independent QA 独立编写，Coding 不创建、预置或嵌入其内容。
+平台固定授权的根容器、包管理和 Feature runtime 制品不属于上述代码路径清单；Independent QA 制品由 QA 独立编写，Coding 不创建、预置或嵌入其内容。
 
 ## 数据流、状态、并发与生命周期
 
@@ -122,7 +122,7 @@ stdout 输出 JSON 日志：时间、level、event、sessionId 哈希、segmentI
 
 多阶段根目录 Dockerfile 在 Node.js 22 镜像中执行锁文件安装、类型检查和构建，runtime stage 仅安装生产依赖、复制 server 与静态资源，以 `USER 10001` 启动 `node` 进程并暴露 `3000`。镜像不得包含源码测试输出、凭据或本地环境文件。
 
-`runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。候选部署平台把已配置 Speech 资源的完整 ARM resource ID 连同 `AZURE_SPEECH_ENDPOINT` 一起以 `AZURE_SPEECH_RESOURCE_ID` 注入 Pod；这两个值必须指向人工确认可用的同一资源。该值不是 secret，但不得由应用从 endpoint host 猜测；缺失或不一致时应用必须在启动阶段失败，而不是以原始 bearer token 尝试 Speech 连接。根 `package.json` 必须把 `@playwright/test` 固定为 devDependency 且锁入 `package-lock.json`。`developerSetupCommands` 依次为 `npm ci --ignore-scripts` 与 `npx playwright install --with-deps chromium`，因此 clean `ubuntu-latest` 不依赖预存 browser cache 或系统 Chromium；`developerValidationCommands` 固定分类为：`staticAnalysis` 执行 `npm run typecheck`，`build` 执行 `npm run build`，`developerTests` 执行 `npm run test:unit`，`integrationTests` 执行 `npm run test:contract`，`functionalTests` 执行 `bash tests/scripts/developer-functional.sh`。该脚本启动显式 deterministic adapter 的测试进程并通过锁定依赖的 `npx --no-install playwright test` 执行 `npm run test:e2e`，同时须通过 `bash -n`。
+`.ai-delivery/features/002-v1/runtime/deployment.json` 声明 `containerPort: 3000`、`healthPath: "/healthz"`、`candidateIdentityPath: "/candidate-identity"`、`requiresPrivateNetwork: false`，不声明 `postgresql`。候选部署平台把已配置 Speech 资源的完整 ARM resource ID 连同 `AZURE_SPEECH_ENDPOINT` 一起以 `AZURE_SPEECH_RESOURCE_ID` 注入 Pod；这两个值必须指向人工确认可用的同一资源。该值不是 secret，但不得由应用从 endpoint host 猜测；缺失或不一致时应用必须在启动阶段失败，而不是以原始 bearer token 尝试 Speech 连接。根 `package.json` 必须把 `@playwright/test` 固定为 devDependency 且锁入 `package-lock.json`。`developerSetupCommands` 依次为 `npm ci --ignore-scripts` 与 `npx playwright install --with-deps chromium`，因此 clean `ubuntu-latest` 不依赖预存 browser cache 或系统 Chromium；`developerValidationCommands` 固定分类为：`staticAnalysis` 执行 `npm run typecheck`，`build` 执行 `npm run build`，`developerTests` 执行 `npm run test:unit`，`integrationTests` 执行 `npm run test:contract`，`functionalTests` 执行 `bash .ai-delivery/features/002-v1/runtime/developer-functional-run.sh`。该脚本启动显式 deterministic adapter 的测试进程并通过锁定依赖的 `npx --no-install playwright test` 执行 `npm run test:e2e`，同时须通过 `bash -n`。根目录 `.dockerignore` 排除构建/测试输出、Git 元数据和本地环境文件。
 
 平台以不可变 candidate SHA 构建镜像并部署到交付命名空间，LoadBalancer 80 转发容器 3000。应用无 schema 和持久化迁移，故无 migration command。Rollout 以 `/healthz` 与 `/candidate-identity` 通过为最低部署条件；真实功能通过 Independent QA 判定。失败时把 Service/Deployment 恢复到上一已知通过的不可变镜像；活动会话会终止，用户需手动重新开始，不执行数据回滚。
 
