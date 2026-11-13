@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0002",
+  "stage": "intent",
+  "outcome": "needs_decision",
+  "summary": "已完成实时流式翻译业务意图，V1 源语言覆盖范围仍需业务方决定。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/intent.md"
+    }
+  ],
+  "decisionsNeeded": [
+    {
+      "id": "BQ-001",
+      "level": "business",
+      "question": "V1 的源语言覆盖范围应如何确定？该答案会决定 INT-005 和 INT-006 覆盖哪些会议发言人。",
+      "options": [
+        {
+          "id": "A",
+          "description": "V1 仅覆盖中文和英文，以最小范围验证核心会议翻译价值。",
+          "recommended": true
+        },
+        {
+          "id": "B",
+          "description": "V1 覆盖业务方指定的固定源语言清单，由业务方另行提供清单。",
+          "recommended": false
+        },
+        {
+          "id": "C",
+          "description": "V1 覆盖客户指定服务所支持的全部源语言。",
+          "recommended": false
+        }
+      ]
+    }
+  ]
+}
