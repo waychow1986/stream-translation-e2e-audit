@@ -126,3 +126,66 @@ Coding 沙箱没有 Azure、AKS 或云凭据，本次未执行且未声称真实
 ### 实施结论
 
 本次已完成 CONV-001 与 CONV-002 的定向修复，新增回归测试先复现失败，随后所有声明的本地静态、构建、单元、contract、Playwright 功能、脚本语法、容器和依赖审计验证通过；结论为 `passed`。
+
+## Coding Session NR-DLV-20261113-96F0EE0F92F9-0036-b01
+
+### 实施范围
+
+本次以 `coding-repair` 模式定向修复 CONV-003 与 CONV-004，覆盖既有 T012、T015、T018、T030、T032。范围仅包括 WebSocket 关闭/错误与 SIGTERM 生命周期清理、活动依赖释放、Speech SDK 授权生命周期及稳定错误映射的实现和聚焦测试，不增加任务或产品行为。
+
+### 完成与受阻任务
+
+CONV-003 与 CONV-004 已完成修复；既有任务均在 Session 起点前已勾选，本次未发生任务 checkbox 变化，因此本次 `completedTaskIds` 为空。没有受阻任务、所需输入或待人工决定事项。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `src/client/translation-client.ts` | WebSocket 关闭、错误、失败和主动断开时幂等停止浏览器采集，并保留正常停止状态 | T015、T032 / CONV-003 |
+| `src/server/app.ts`、`src/server/websocket.ts` | 跟踪活动连接，断连时释放 Session，应用关闭时拒绝新连接、等待全部 Session 清理并关闭 WebSocket | T030、T032 / CONV-003 |
+| `src/server/translation-session.ts` | 幂等共享失败清理，取消 Speech 与模型流、等待翻译队列释放，并把 Speech 初始化失败稳定映射为 `SPEECH_UNAVAILABLE` | T012、T030、T032 / CONV-003、CONV-004 |
+| `src/server/adapters/azure-speech.ts` | 为真实 SDK 边界增加可记录依赖注入，保持生产默认 SDK，实现可执行授权、语言识别、刷新与取消 contract | T012、T018 / CONV-004 |
+| `tests/unit/resource-cleanup.test.ts` | 实际触发客户端 WebSocket close/error 并验证采集只停止一次 | T015、T030 / CONV-003 |
+| `tests/contract/shutdown.contract.test.ts` | 实际驱动 WebSocket 断连、正常停止与子进程 SIGTERM，验证 Speech、模型流、连接释放及新会话可建立 | T030、T032 / CONV-003 |
+| `tests/contract/azure-speech.contract.test.ts` | 以记录式 SDK/credential fake 覆盖初始完整授权、continuous language identification、活动 recognizer 刷新、取消、稳定错误及事件不含授权值 | T012、T018 / CONV-004 |
+| `.ai-delivery/features/002-v1/reports/implementation.md`、`.ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0036-b01.json` | 追加本 Session 真实证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| design 生命周期 / T015、T030、T032 / CONV-003 | `src/client/translation-client.ts`、`src/server/websocket.ts`、`src/server/translation-session.ts` | `tests/unit/resource-cleanup.test.ts`、`tests/contract/shutdown.contract.test.ts` | WebSocket close/error、正常 stop、实际 SIGTERM、依赖取消和新会话重建的定向测试通过 |
+| FR-001～FR-003 / AC-001～AC-002 / T012、T018 / CONV-004 | `src/server/adapters/azure-speech.ts`、`src/server/translation-session.ts` | `tests/contract/azure-speech.contract.test.ts` | 完整 Entra 授权、continuous language identification、活动 recognizer 刷新、取消及稳定错误映射通过 |
+| IQA-001～IQA-003 回归边界 | 既有浏览器、Speech/Foundry 编排与字幕实现 | `tests/e2e/` | 10 项本地 deterministic Playwright 测试通过；真实 Azure 证据仍按责任矩阵延后 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `npm ci --ignore-scripts` | Copilot 沙箱，Node.js 22 | 通过，退出码 0 | 安装 214 个锁定 package，audit 为 0 个漏洞 |
+| `npx vitest run --root . tests/unit/resource-cleanup.test.ts tests/contract/shutdown.contract.test.ts tests/contract/azure-speech.contract.test.ts`（实现前） | Copilot 沙箱 | 预期失败，退出码 1 | 5 项新增测试因客户端未处理 close/error、服务端未释放断连依赖、Azure adapter 不可注入且初始化错误未稳定映射而失败 |
+| `npm run typecheck && npx vitest run --root . tests/unit/resource-cleanup.test.ts tests/contract/shutdown.contract.test.ts tests/contract/azure-speech.contract.test.ts`（实现后） | Copilot 沙箱 | 通过，退出码 0 | TypeScript 无诊断；3 文件 9 项聚焦测试通过 |
+| `npx playwright install --with-deps chromium` | Copilot 沙箱 | 通过，退出码 0 | Chromium、headless shell、FFmpeg 与所需系统依赖安装完成 |
+| `npm run typecheck && npm run build && npm run test:unit && npm run test:contract` | Copilot 沙箱 | 通过，退出码 0 | TypeScript 与生产构建通过；4 文件 7 项 unit、9 文件 20 项 contract 测试通过 |
+| `DEV_FUNCTIONAL_RESULT_PATH=/tmp/developer-functional-result-0036-final.json bash .ai-delivery/features/002-v1/runtime/developer-functional-run.sh` | Copilot 沙箱，Chromium，提交 WAV，deterministic adapter | 通过，退出码 0 | 10 项 Playwright 测试通过并写出 `passed:true` |
+| `bash -n .ai-delivery/features/002-v1/runtime/developer-functional-run.sh` | Copilot 沙箱 | 通过，退出码 0 | 功能脚本语法有效 |
+| `docker build -t stream-translation-candidate:repair-0036-final .` | Copilot 沙箱 Docker | 通过，退出码 0 | Node.js 22 多阶段生产镜像构建成功，生产依赖 audit 为 0 个漏洞 |
+| 容器 `/healthz`、`/candidate-identity` 与 `id -u` smoke | 本地生产容器 | 通过，退出码 0 | 返回 `{"status":"ok"}`、原样测试 identity，UID 为 `10001` |
+| `npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=moderate` | Copilot 沙箱 | 通过，退出码 0 | 生产与完整依赖均为 0 个已知漏洞 |
+| `git diff --check`、最终路径清单和敏感模式扫描 | Copilot 沙箱 | 通过，退出码 0 | 无空白错误，改动均在批准路径内，未发现凭据或私钥 |
+
+### Runtime 与下游门禁就绪制品
+
+根 `Dockerfile`、`runtime/deployment.json` 和开发者功能脚本契约保持不变。生产镜像重新构建并通过 health、candidate identity 与数字非 root UID smoke。SIGTERM 现经 Fastify 关闭钩子拒绝新连接、等待活动 Session 取消 Speech/模型流并关闭 WebSocket；记录式 Speech contract 使用合成授权值且不写入事件或日志。
+
+### 延后平台证据
+
+Coding 沙箱没有 Azure、AKS 或云凭据，本次未执行且未声称真实 Azure Speech、Azure AI Foundry、Workload Identity、不可变 Candidate、AKS 部署或 Independent QA 结果。真实 Speech SDK 的远程授权续期、continuous language identification、真实服务取消，以及 IQA-001～IQA-003 仍由候选验证和 Independent QA 产生。
+
+### 剩余风险
+
+本地记录式 SDK/credential fake 证明 adapter 参数和生命周期 contract，但不构成真实 Azure 集成通过证据。AKS 实际 SIGTERM 宽限期、真实 Speech token 刷新与服务端取消完成情况只能由下游环境核验；本地结果未替代这些平台证据。
+
+### 实施结论
+
+本次已完成 CONV-003 与 CONV-004 的定向修复：新增测试先复现缺口，随后聚焦测试、全部声明的静态检查、构建、unit、contract、Playwright 功能、脚本语法、生产镜像、容器 smoke、依赖审计和范围/敏感信息检查均通过；结论为 `passed`。

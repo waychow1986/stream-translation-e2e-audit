@@ -33,6 +33,7 @@ export class TranslationSession {
   private readonly abortController = new AbortController();
   private readonly queue: TranslationQueue;
   private closed = false;
+  private failureCleanup?: Promise<void>;
 
   constructor(
     private readonly adapters: SessionAdapters,
@@ -43,10 +44,16 @@ export class TranslationSession {
 
   async start(): Promise<void> {
     this.lifecycle.start();
-    await this.adapters.speech.start(
-      (segment) => this.acceptSegment(segment),
-      () => void this.fail("SPEECH_UNAVAILABLE")
-    );
+    try {
+      await this.adapters.speech.start(
+        (segment) => this.acceptSegment(segment),
+        () => void this.fail("SPEECH_UNAVAILABLE")
+      );
+    } catch {
+      await this.fail("SPEECH_UNAVAILABLE");
+      return;
+    }
+    if (this.lifecycle.state === "failed") return;
     this.lifecycle.started();
     this.emit({ type: "session.started", protocolVersion: 1, sessionId: randomUUID() });
   }
@@ -69,12 +76,21 @@ export class TranslationSession {
   }
 
   async fail(code: FailureCode = "INTERNAL_ERROR"): Promise<void> {
-    if (this.closed) return;
+    return this.beginFailure(code, true);
+  }
+
+  private beginFailure(code: FailureCode, waitForQueue: boolean): Promise<void> {
+    if (this.failureCleanup) return this.failureCleanup;
+    if (this.closed) return Promise.resolve();
     this.lifecycle.fail();
     this.closed = true;
-    this.abortController.abort();
-    await this.adapters.speech.cancel();
-    this.emit({ type: "session.failed", code });
+    this.failureCleanup = Promise.resolve().then(async () => {
+      this.abortController.abort();
+      await this.adapters.speech.cancel();
+      if (waitForQueue) await this.queue.drain();
+      this.emit({ type: "session.failed", code });
+    });
+    return this.failureCleanup;
   }
 
   private acceptSegment(segment: RecognitionSegment): void {
@@ -116,7 +132,9 @@ export class TranslationSession {
         modelRequestId: result.requestId
       });
     } catch {
-      await this.fail("MODEL_UNAVAILABLE");
+      if (this.lifecycle.state !== "failed") {
+        await this.beginFailure("MODEL_UNAVAILABLE", false);
+      }
     }
   }
 }
