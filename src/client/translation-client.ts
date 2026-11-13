@@ -52,10 +52,21 @@ export class TranslationClient {
       const event = JSON.parse(String(data)) as ServerEvent;
       this.onEvent(event);
       if (event.type === "session.started") {
-        this.onStatus("正在聆听");
-        await this.capture.start((frame) => {
-          if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(frame);
-        });
+        try {
+          await this.capture.start((frame) => {
+            const socket = this.socket;
+            if (socket && socket.readyState === socket.OPEN) socket.send(frame);
+          });
+          this.onStatus("正在聆听");
+        } catch {
+          this.terminalEventReceived = true;
+          try {
+            await this.cleanupCapture();
+          } finally {
+            this.socket?.close();
+            this.onStatus("麦克风启动失败");
+          }
+        }
       } else if (event.type === "session.stopped") {
         this.terminalEventReceived = true;
         this.onStatus("已停止");
