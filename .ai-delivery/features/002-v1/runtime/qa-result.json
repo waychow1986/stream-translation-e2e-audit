@@ -2,14 +2,41 @@
   "passed": false,
   "testedCommitSha": "f1b0c9eec6de1fc42091578c7d71b34901ad4df5",
   "environmentUrl": "http://74.159.182.40",
-  "summary": "Independent QA 未执行：候选环境或测试前置未就绪。",
-  "qaPlanCommitSha": "cf747c4b5a2bf1a5e99a6d30a128ef0785d909c6",
-  "qaPlanHash": "sha256:471c1579e2736069688a4999c93560381075666a20bb70c99884d8e7dab668ca",
-  "defects": [],
+  "summary": "Independent QA 发现已批准场景失败或执行覆盖缺口，详见 defects、testGaps 与场景证据。",
+  "qaPlanCommitSha": "6ffe92e64ae925847a5997f98ebac1e8e6cdbc5b",
+  "qaPlanHash": "sha256:00b2f6d39ff51b2bfb0802f2713089ca8e7918f5aff819833ff4f3739ae76721",
+  "defects": [
+    "IQA-001 未满足持续字幕：采集帧=0，第二段播放中点的首字幕=\"\"，最终字幕=[]。",
+    "IQA-002 未满足自动英语检测到中文：select=0，检测语言=[]，目标语言=[]。",
+    "IQA-003 完整实际依赖流程未成立：Speech事件=0，Foundry/关联证据=0，失败码=[]。"
+  ],
   "testGaps": [],
   "evidence": [
-    "测试前置失败：Azure Speech TTS 合成未成功（first exit=0 HTTP=404 ；second exit=0 HTTP=404 ）。"
+    "候选 health 与 identity 已校验；测试语音由 QA 托管身份调用 Azure Speech TTS 合成，片段时长 first=2025ms、second=2363ms。",
+    "流程检查点：采集音频帧=0；客户端控制消息=1；Speech返回=0；字幕delta/final=0/0；页面字幕=0。",
+    "WebSocket事件摘要：2026-11-13T16:03:00.879Z frame=0 session.started",
+    "浏览器控制台摘要：无控制台消息",
+    "网络错误摘要：无失败请求"
   ],
   "bugfixResults": [],
-  "scenarios": []
+  "scenarios": [
+    {
+      "id": "IQA-001",
+      "passed": false,
+      "externalServices": [],
+      "evidence": "音频帧=0，第二段中点帧=285，中点可见首字幕=\"\"，最终字幕=[]，speech.final=0，delta=0，final=0。"
+    },
+    {
+      "id": "IQA-002",
+      "passed": false,
+      "externalServices": [],
+      "evidence": "语言选择控件=0，检测语言=[]，目标语言=[]，中文字幕=[]。"
+    },
+    {
+      "id": "IQA-003",
+      "passed": false,
+      "externalServices": [],
+      "evidence": "start已发送=false，实际依赖关联数=0，非test-double关联=false，会话失败=[]，页面状态=\"麦克风启动失败\"。"
+    }
+  ]
 }
