@@ -93,6 +93,7 @@ BFF 不保存跨请求 session。浏览器拥有本次流程状态、递增 sequ
 | `idle` / `stopped` / `interrupted` | 手动发起 | 候选范围有效但设备许可或采集启动失败；关闭已创建资源 | `interrupted` |
 | `running` | 手动停止 | 递增 generation，停止并销毁所有资源 | `stopping` → `stopped` |
 | `interrupted` | 手动停止 | 将目标终态固定为 `stopped`，递增 generation；加入或重用当前终止任务，对所有资源执行幂等清理 | `stopping` → `stopped` |
+| `stopped` | 重复到达的手动停止事件 | 不改变 generation；对空资源句柄执行成功 no-op | `stopped` |
 | `running` / `starting` | 必需步骤失败 | 记录无正文错误并关闭所有资源 | `interrupted` |
 | 任意页面状态 | 页面卸载 | best-effort 关闭资源，不保存状态 | 生命周期结束 |
 
