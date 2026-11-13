@@ -7,9 +7,6 @@
   "artifacts": [
     {
       "path": ".ai-delivery/features/002-v1/intent.md"
-    },
-    {
-      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0003.json"
     }
   ],
   "decisionsNeeded": [
