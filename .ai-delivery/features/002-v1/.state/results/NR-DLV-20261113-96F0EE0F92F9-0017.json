@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0017",
+  "stage": "technical-solution.gate",
+  "outcome": "repair",
+  "summary": "上一轮四项阻塞已解决，但 Speech SDK 的 Workload Identity 认证配置仍缺少 Microsoft Entra 令牌所需的资源标识与令牌格式，技术方案尚不可实施。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0017.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "TS-FEAS-001",
+      "severity": "high",
+      "owner": "technical-solution",
+      "route": "current_stage",
+      "summary": "服务端 Speech 的 Workload Identity 认证契约仍不可实施：修订方案把 DefaultAzureCredential 取得的 Entra access token 原文赋给 SpeechConfig.authorizationToken，并明确不提供或推导 Speech resource ID；但 Azure AI Speech SDK 的 Microsoft Entra 认证需要由 Speech 资源 ID 与 access token 组成的 authorization token，只有 endpoint 和原始 bearer token 不足以按所选 SDK 建立识别会话。",
+      "recommendation": "补充平台可提供或可确定取得的 Speech 资源 ID 配置，按 Azure AI Speech SDK 的 Microsoft Entra 认证格式构造 authorizationToken，并让初次配置、活动 recognizer 续期、环境变量校验及部署注入契约保持一致；不得从 endpoint host 猜测资源 ID。",
+      "resolvesPrevious": "TS-FEAS-001"
+    }
+  ]
+}
