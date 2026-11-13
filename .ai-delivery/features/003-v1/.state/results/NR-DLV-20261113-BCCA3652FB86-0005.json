@@ -7,9 +7,6 @@
   "artifacts": [
     {
       "path": ".ai-delivery/features/003-v1/spec.md"
-    },
-    {
-      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0005.json"
     }
   ],
   "decisionsNeeded": [
