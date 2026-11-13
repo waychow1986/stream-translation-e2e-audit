@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0050",
+  "stage": "bugfix.assessment",
+  "outcome": "passed",
+  "summary": "三个场景的共同字幕超时被评估为未满足浏览器安全上下文前置条件的环境故障，不进入代码修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/bugfixes/BUG-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0050.json"
+    }
+  ],
+  "inputsNeeded": [],
+  "decisionsNeeded": []
+}
