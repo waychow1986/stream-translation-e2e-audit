@@ -10,15 +10,17 @@ interface RecognitionInput {
 }
 
 export interface ProtocolEvidence {
+  starts: number;
   stops: number;
   tokenUpdates: string[];
   translationRequests: Array<{ segmentId: string; revision: number; mode: string; text: string }>;
 }
 
 export async function installDriver(page: Page, scenario: Scenario): Promise<ProtocolEvidence> {
-  const evidence: ProtocolEvidence = { stops: 0, tokenUpdates: [], translationRequests: [] };
-  await page.exposeFunction("__recordCaptionProtocolEvent", (event: { type: "stop" | "token"; value?: string }) => {
-    if (event.type === "stop") evidence.stops += 1;
+  const evidence: ProtocolEvidence = { starts: 0, stops: 0, tokenUpdates: [], translationRequests: [] };
+  await page.exposeFunction("__recordCaptionProtocolEvent", (event: { type: "start" | "stop" | "token"; value?: string }) => {
+    if (event.type === "start") evidence.starts += 1;
+    else if (event.type === "stop") evidence.stops += 1;
     else evidence.tokenUpdates.push(event.value ?? "");
   });
 
@@ -31,7 +33,7 @@ export async function installDriver(page: Page, scenario: Scenario): Promise<Pro
     const expiresAt =
       scenario === "lifecycle" && tokenRequests === 1
         ? new Date(Date.now() + 2 * 60_000).toISOString()
-        : "2099-01-01T00:00:00.000Z";
+        : new Date(Date.now() + 10 * 60_000).toISOString();
     return route.fulfill({ json: { authorizationToken: `token-${tokenRequests}`, expiresAt } });
   });
   await page.route("**/api/translations", async (route) => {
@@ -66,6 +68,11 @@ export async function installDriver(page: Page, scenario: Scenario): Promise<Pro
             const timers: number[] = [];
             return {
               async start() {
+                await (
+                  window as typeof window & {
+                    __recordCaptionProtocolEvent(event: { type: "start" | "stop" | "token"; value?: string }): Promise<void>;
+                  }
+                ).__recordCaptionProtocolEvent({ type: "start" });
                 const events =
                   selected === "recovery" && sessionNumber > 1
                     ? [{ delay: 0, text: "new session", language: "en-US" as const, final: true }]
@@ -116,8 +123,8 @@ function recognitionInputs(scenario: Scenario): RecognitionInput[] {
   if (scenario === "chinese") {
     return [
       { delay: 0, text: "你好", language: "zh-CN", final: false },
-      { delay: 100, text: "你好世界", language: "zh-CN", final: false },
-      { delay: 200, text: "你好世界", language: "zh-CN", final: true }
+      { delay: 500, text: "你好世界", language: "zh-CN", final: false },
+      { delay: 1_000, text: "你好世界", language: "zh-CN", final: true }
     ];
   }
   if (scenario === "many") {

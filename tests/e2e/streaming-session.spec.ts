@@ -17,6 +17,7 @@ test("the protocol adapter receives token refresh and is stopped on user stop an
   await page.getByRole("button", { name: "停止字幕" }).click();
   await expect.poll(() => evidence.stops).toBe(1);
   await page.getByRole("button", { name: "开始字幕" }).click();
-  await page.reload();
+  await expect.poll(() => evidence.starts).toBe(2);
+  await page.evaluate(() => window.dispatchEvent(new Event("pagehide")));
   await expect.poll(() => evidence.stops).toBe(2);
 });

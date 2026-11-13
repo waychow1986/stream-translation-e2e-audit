@@ -79,6 +79,7 @@ export class SessionController {
   async start(): Promise<void> {
     const config = await this.dependencies.getConfig();
     const token = await this.dependencies.getToken();
+    if (this.terminated) return;
     this.active = true;
     this.speech = this.dependencies.createSpeechSession(config.speechEndpoint, token.authorizationToken, {
       onRecognition: (result) => {

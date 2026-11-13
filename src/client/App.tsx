@@ -16,7 +16,14 @@ export function App() {
   const [state, dispatch] = useReducer(captionReducer, initialCaptionState);
   const [running, setRunning] = useState(false);
   const controller = useRef<SessionController | null>(null);
-  useEffect(() => () => void controller.current?.stop(), []);
+  useEffect(() => {
+    const stopOnUnload = () => void controller.current?.stop();
+    window.addEventListener("pagehide", stopOnUnload);
+    return () => {
+      window.removeEventListener("pagehide", stopOnUnload);
+      stopOnUnload();
+    };
+  }, []);
 
   async function start() {
     setRunning(true);

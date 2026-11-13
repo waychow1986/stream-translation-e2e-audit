@@ -97,10 +97,23 @@ test("an English final fixes before an interleaved next segment receives a new i
 
 for (const failure of ["ndjson", "fetch"] as const) {
   test(`${failure} translation failure terminates the session and ignores later recognition`, async () => {
+    let existing = captionReducer(initialCaptionState, {
+      type: "recognizing",
+      segmentId: "fixed",
+      language: "zh-CN",
+      sourceText: "保留",
+      revision: 1
+    });
+    existing = captionReducer(existing, {
+      type: "recognizedChinese",
+      segmentId: "fixed",
+      sourceText: "保留",
+      revision: 2
+    });
     const harness = controllerHarness(async (_request, _signal, onEvent) => {
       if (failure === "ndjson") onEvent({ type: "error", code: "DEPENDENCY_FAILED" });
       else throw new Error("dependency unavailable");
-    });
+    }, existing);
     await harness.controller.start();
     harness.callbacks().onRecognition({ text: "will fail", language: "en-US", final: true });
     await settle();
@@ -110,6 +123,7 @@ for (const failure of ["ndjson", "fetch"] as const) {
     assert.equal(harness.stopCount(), 1);
     assert.equal(harness.requests.length, 1);
     assert.equal(harness.state().current, null);
+    assert.equal(harness.state().fixedSegments[0]?.displayText, "保留");
   });
 }
 
