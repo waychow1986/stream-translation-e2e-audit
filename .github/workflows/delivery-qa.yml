@@ -1,14 +1,11 @@
 name: Independent QA
+run-name: qa ${{ inputs.correlation_id }}
 
 on:
   workflow_dispatch:
     inputs:
       delivery_id:
         description: AIDelivery Hub delivery identifier
-        required: true
-        type: string
-      attempt:
-        description: Candidate repair attempt
         required: true
         type: string
       candidate_sha:
@@ -23,8 +20,8 @@ on:
         description: Candidate health endpoint path
         required: true
         type: string
-      qa_evidence_branch:
-        description: Copilot QA evidence branch
+      qa_branch:
+        description: QA branch cut from the candidate that holds the locked plan and the QA evidence
         required: true
         type: string
       qa_plan_path:
@@ -39,20 +36,37 @@ on:
         description: SHA-256 hash of the locked QA plan
         required: true
         type: string
+      correlation_id:
+        description: AIDelivery Hub node run correlation identifier
+        required: true
+        type: string
 
 permissions:
   contents: write
   id-token: write
+
+# Inputs reach shell scripts only through environment variables, never through
+# expression interpolation inside run scripts.
+env:
+  DELIVERY_ID: ${{ inputs.delivery_id }}
+  CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+  CANDIDATE_URL: ${{ inputs.candidate_url }}
+  HEALTH_PATH: ${{ inputs.health_path }}
+  QA_BRANCH: ${{ inputs.qa_branch }}
+  QA_PLAN_PATH: ${{ inputs.qa_plan_path }}
+  QA_PLAN_COMMIT_SHA: ${{ inputs.qa_plan_commit_sha }}
+  QA_PLAN_HASH: ${{ inputs.qa_plan_hash }}
+  CORRELATION_ID: ${{ inputs.correlation_id }}
 
 jobs:
   qa:
     name: Independent QA execution
     runs-on: ubuntu-latest
     steps:
-      - name: Check out Copilot QA evidence branch
+      - name: Check out QA branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.qa_evidence_branch }}
+          ref: ${{ inputs.qa_branch }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -73,22 +87,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git check-ref-format --branch "$QA_BRANCH" >/dev/null
           qa_plan="$ARTIFACT_ROOT/tasks-qa.md"
           qa_script="$ARTIFACT_ROOT/runtime/qa-run.sh"
-          test "${{ inputs.qa_plan_path }}" = "$qa_plan"
-          test "$(git rev-parse HEAD)" = "${{ inputs.qa_plan_commit_sha }}"
+          test "$QA_PLAN_PATH" = "$qa_plan"
+          test "$(git rev-parse HEAD)" = "$QA_PLAN_COMMIT_SHA"
           test -f "$qa_plan"
           test -f "$qa_script"
-          git merge-base --is-ancestor "${{ inputs.candidate_sha }}" HEAD
+          git merge-base --is-ancestor "$CANDIDATE_SHA" HEAD
           actual_hash="sha256:$(sha256sum "$qa_plan" | cut -d' ' -f1)"
-          test "$actual_hash" = "${{ inputs.qa_plan_hash }}"
+          if [[ "$actual_hash" != "$QA_PLAN_HASH" ]]; then
+            echo "QA plan hash $actual_hash does not match the locked plan $QA_PLAN_HASH." >&2
+            exit 1
+          fi
+          # The QA branch may only add the locked plan, the QA script, the evidence of earlier QA runs and
+          # the platform result files of its agent sessions.
           unexpected="$(
-            git diff --name-only "${{ inputs.candidate_sha }}..HEAD" |
+            git diff --name-only "$CANDIDATE_SHA..HEAD" |
               grep -Fvx "$qa_plan" |
-              grep -Fvx "$qa_script" || true
+              grep -Fvx "$qa_script" |
+              grep -Fvx "$ARTIFACT_ROOT/runtime/qa-result.json" |
+              grep -Ev "^${ARTIFACT_ROOT//./\.}/\.state/results/[^/]+\.json$" || true
           )"
           if [[ -n "$unexpected" ]]; then
-            echo "QA evidence branch contains changes outside the locked QA artifacts:" >&2
+            echo "QA branch contains changes outside the locked QA artifacts:" >&2
             echo "$unexpected" >&2
             exit 1
           fi
@@ -108,10 +130,18 @@ jobs:
         shell: bash
         env:
           AZURE_CONFIG_DIR: ${{ runner.temp }}/.azure
+          HUB_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          HUB_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          HUB_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          HUB_SPEECH_ENDPOINT: ${{ vars.AZURE_SPEECH_ENDPOINT }}
+          HUB_SPEECH_RESOURCE_ID: ${{ vars.AZURE_FOUNDRY_RESOURCE_ID }}
+          HUB_AI_PROJECT_ENDPOINT: ${{ vars.AZURE_AI_PROJECT_ENDPOINT }}
+          HUB_AI_MODEL_DEPLOYMENT: ${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}
         run: |
           set -euo pipefail
+          result_relative="$ARTIFACT_ROOT/runtime/qa-result.json"
           script="$GITHUB_WORKSPACE/$ARTIFACT_ROOT/runtime/qa-run.sh"
-          result="$GITHUB_WORKSPACE/$ARTIFACT_ROOT/runtime/qa-result.json"
+          result="$GITHUB_WORKSPACE/$result_relative"
           log="$RUNNER_TEMP/qa-run.log"
           work="$RUNNER_TEMP/qa-work"
           rm -rf "$work"
@@ -135,20 +165,21 @@ jobs:
               PATH="$PATH" \
               HOME="$work" \
               PLAYWRIGHT_BROWSERS_PATH="$work/.playwright" \
-              QA_DELIVERY_ID="${{ inputs.delivery_id }}" \
-              QA_CANDIDATE_SHA="${{ inputs.candidate_sha }}" \
-              QA_BASE_URL="${{ inputs.candidate_url }}" \
-              QA_HEALTH_PATH="${{ inputs.health_path }}" \
-              QA_PLAN_COMMIT_SHA="${{ inputs.qa_plan_commit_sha }}" \
-              QA_PLAN_HASH="${{ inputs.qa_plan_hash }}" \
+              QA_DELIVERY_ID="$DELIVERY_ID" \
+              QA_CANDIDATE_SHA="$CANDIDATE_SHA" \
+              QA_BASE_URL="$CANDIDATE_URL" \
+              QA_HEALTH_PATH="$HEALTH_PATH" \
+              QA_PLAN_COMMIT_SHA="$QA_PLAN_COMMIT_SHA" \
+              QA_PLAN_HASH="$QA_PLAN_HASH" \
               QA_RESULT_PATH="$result" \
               AZURE_CONFIG_DIR="$AZURE_CONFIG_DIR" \
-              AZURE_CLIENT_ID="${{ vars.AZURE_CLIENT_ID }}" \
-              AZURE_TENANT_ID="${{ vars.AZURE_TENANT_ID }}" \
-              AZURE_SUBSCRIPTION_ID="${{ vars.AZURE_SUBSCRIPTION_ID }}" \
-              AZURE_SPEECH_ENDPOINT="${{ vars.AZURE_SPEECH_ENDPOINT }}" \
-              AZURE_AI_PROJECT_ENDPOINT="${{ vars.AZURE_AI_PROJECT_ENDPOINT }}" \
-              AZURE_AI_MODEL_DEPLOYMENT="${{ vars.AZURE_AI_MODEL_DEPLOYMENT }}" \
+              AZURE_CLIENT_ID="$HUB_CLIENT_ID" \
+              AZURE_TENANT_ID="$HUB_TENANT_ID" \
+              AZURE_SUBSCRIPTION_ID="$HUB_SUBSCRIPTION_ID" \
+              AZURE_SPEECH_ENDPOINT="$HUB_SPEECH_ENDPOINT" \
+              AZURE_SPEECH_RESOURCE_ID="$HUB_SPEECH_RESOURCE_ID" \
+              AZURE_AI_PROJECT_ENDPOINT="$HUB_AI_PROJECT_ENDPOINT" \
+              AZURE_AI_MODEL_DEPLOYMENT="$HUB_AI_MODEL_DEPLOYMENT" \
               bash "$script"
           ) >"$log" 2>&1
           status=$?
@@ -157,14 +188,17 @@ jobs:
           valid=false
           if [[ -f "$result" ]] && [[ "$(wc -c <"$result")" -le 262144 ]]; then
             if jq -e \
-              --arg sha "${{ inputs.candidate_sha }}" \
-              --arg url "${{ inputs.candidate_url }}" \
+              --arg sha "$CANDIDATE_SHA" \
+              --arg url "$CANDIDATE_URL" \
+              --arg plan_commit "$QA_PLAN_COMMIT_SHA" \
+              --arg plan_hash "$QA_PLAN_HASH" \
               '
                 (.passed | type == "boolean") and
                 (.testedCommitSha == $sha) and
+                (.environmentUrl | type == "string") and
                 (.environmentUrl | rtrimstr("/") == ($url | rtrimstr("/"))) and
-                (.qaPlanCommitSha == "${{ inputs.qa_plan_commit_sha }}") and
-                (.qaPlanHash == "${{ inputs.qa_plan_hash }}") and
+                (.qaPlanCommitSha == $plan_commit) and
+                (.qaPlanHash == $plan_hash) and
                 (.summary | type == "string") and
                 (.defects | type == "array" and all(.[]; type == "string")) and
                 (.testGaps | type == "array" and all(.[]; type == "string")) and
@@ -179,7 +213,7 @@ jobs:
                 (.scenarios | type == "array") and
                 all(
                   .scenarios[];
-                  (.id | type == "string" and length > 0) and
+                  (.id | type == "string" and test("^IQA-[0-9]{3,}$")) and
                   (.passed | type == "boolean") and
                   (.externalServices | type == "array" and all(.[]; type == "string")) and
                   (.evidence | type == "string" and length > 0)
@@ -198,9 +232,11 @@ jobs:
             fi
           fi
 
+          # Only the QA result may change. It may be untracked (normal case) or a
+          # tracked file that the plan rewrote; neither invalidates the run.
           unauthorized="$(
-            git status --porcelain --untracked-files=all |
-              grep -Fvx "?? $ARTIFACT_ROOT/runtime/qa-result.json" || true
+            git status --porcelain --untracked-files=all -- . \
+              ":(exclude,literal)$result_relative" || true
           )"
           if [[ -n "$unauthorized" ]]; then
             valid=false
@@ -219,15 +255,17 @@ jobs:
               } | tr -d '\000'
             )"
             jq -n \
-              --arg sha "${{ inputs.candidate_sha }}" \
-              --arg url "${{ inputs.candidate_url }}" \
+              --arg sha "$CANDIDATE_SHA" \
+              --arg url "$CANDIDATE_URL" \
+              --arg plan_commit "$QA_PLAN_COMMIT_SHA" \
+              --arg plan_hash "$QA_PLAN_HASH" \
               --arg evidence "$evidence" \
               '{
                 passed: false,
                 testedCommitSha: $sha,
                 environmentUrl: $url,
-                qaPlanCommitSha: "${{ inputs.qa_plan_commit_sha }}",
-                qaPlanHash: "${{ inputs.qa_plan_hash }}",
+                qaPlanCommitSha: $plan_commit,
+                qaPlanHash: $plan_hash,
                 summary: "Independent QA execution was blocked before a valid result was produced.",
                 defects: [],
                 testGaps: [],
@@ -239,7 +277,7 @@ jobs:
 
           jq . "$result"
 
-      - name: Commit immutable QA evidence
+      - name: Commit QA evidence to the QA branch
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -249,8 +287,9 @@ jobs:
           test -f "$result"
           git config user.name "AIDelivery Hub"
           git config user.email "aidelivery-hub@users.noreply.github.com"
-          git add --force "$result"
-          git commit -m "Record independent QA execution"
+          git add --force -- "$result"
+          # Always record a run-specific commit, even if the result content is unchanged.
+          git commit --allow-empty -m "Record independent QA execution ($CORRELATION_ID)"
           git push \
             "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
-            "HEAD:${{ inputs.qa_evidence_branch }}"
+            "HEAD:refs/heads/$QA_BRANCH"
