@@ -1,4 +1,4 @@
-import { buildApp } from "./app.ts";
+import { buildApp, prepareAppShutdown } from "./app.ts";
 import { createAzureCredential, createCognitiveTokenProvider } from "./azure-credential.ts";
 import { loadConfig } from "./config.ts";
 import { FoundryTranslator } from "./foundry-adapter.ts";
@@ -20,7 +20,7 @@ async function shutdown(signal: string) {
   if (stopping) return;
   stopping = true;
   log("shutdown", { signal });
-  app.shutdownTranslations();
+  prepareAppShutdown(app);
   await app.close();
 }
 process.on("SIGTERM", () => void shutdown("SIGTERM"));

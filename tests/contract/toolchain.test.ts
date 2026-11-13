@@ -8,10 +8,10 @@ test("approved stack and clean validation scripts are locked", async () => {
   const expected: Record<string, string> = {
     typescript: "5.9.3",
     react: "19.2.0",
-    vite: "7.2.2",
-    fastify: "5.6.2",
+    vite: "7.3.8",
+    fastify: "5.12.8",
     "microsoft-cognitiveservices-speech-sdk": "1.53.0",
-    "@azure/identity": "4.13.0",
+    "@azure/identity": "4.14.1",
     openai: "7.2.0",
     "@playwright/test": "1.56.1"
   };

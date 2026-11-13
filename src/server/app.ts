@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -16,17 +16,21 @@ interface AppDependencies {
   translator: FoundryTranslator | null;
 }
 
+const translationRegistries = new WeakMap<FastifyInstance, InFlightTranslations>();
+
+export function prepareAppShutdown(app: FastifyInstance): void {
+  translationRegistries.get(app)?.shutdown();
+}
+
 export async function buildApp({ config, tokenProvider, translator }: AppDependencies) {
-  const app = Fastify({ logger: false, bodyLimit: 16 * 1024 }) as ReturnType<typeof Fastify> & {
-    shutdownTranslations(): void;
-  };
+  const app = Fastify({ logger: false, bodyLimit: 16 * 1024 });
   installSecurity(app, config.speechEndpoint);
   app.get("/healthz", async () => ({ status: "ok" }));
   app.get("/candidate-identity", async () => ({ deliveryId: config.deliveryId, candidateSha: config.candidateSha }));
   registerConfigRoute(app, config);
   registerSpeechTokenRoute(app, tokenProvider);
   const registry = new InFlightTranslations();
-  app.shutdownTranslations = () => registry.shutdown();
+  translationRegistries.set(app, registry);
   registerTranslationRoute(app, translator, registry);
   app.addHook("onClose", async () => registry.shutdown());
   const clientRoot = resolve("dist/client");
