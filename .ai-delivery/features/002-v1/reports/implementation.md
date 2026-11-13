@@ -65,3 +65,64 @@ Coding 沙箱没有 Azure、AKS 或云凭据，未执行且未声称真实 Azure
 ### 实施结论
 
 本次已完成 T001～T036 及全部 Coding 责任内验证，生产实现、开发者测试、合成素材、Dockerfile 和 runtime 制品均已就绪；结论为 `passed`。真实 Azure 与部署验收按责任矩阵延后，不作为 Coding 阻塞。
+
+## Coding Session NR-DLV-20261113-96F0EE0F92F9-0034-b01
+
+### 实施范围
+
+本次以 `coding-repair` 模式定向修复 CONV-001 与 CONV-002，覆盖既有 T014、T019、T024～T027、T033，不增加产品范围或任务。修复真实 Foundry delta 的即时传播契约，并以已提交合成 WAV、Chromium fake microphone、`getUserMedia` 和 AudioWorklet 重建本地 Playwright 功能证据。
+
+### 完成与受阻任务
+
+CONV-001 与 CONV-002 已完成修复；既有任务均在 Session 起点前已勾选，本次未发生任务 checkbox 变化，因此本次 `completedTaskIds` 为空。没有受阻任务、所需输入或待人工决定事项。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `src/shared/types.ts`、`src/server/adapters/foundry.ts`、`src/server/adapters/azure-foundry.ts`、`src/server/translation-session.ts` | 将翻译 contract 改为 delta 到达即回调并立即发送，流结束后再发送 final 与 evidence | T026、T027 / CONV-001 |
+| `src/server/adapters/deterministic.ts` | 按 WAV 输入进度生成可区分的两个 finalized 片段，并通过增量回调输出翻译 | T014、T024、T027 / CONV-002 |
+| `src/client/audio-capture.ts`、`playwright.config.ts` | 移除 PCM 测试旁路，以可加载的 AudioWorklet asset 处理 Chromium fake microphone 播放的提交 WAV | T014、T019 / CONV-002 |
+| `tests/contract/foundry.contract.test.ts`、`tests/contract/websocket-session.contract.test.ts` | 增加模型流尚未结束时前序 delta 已可观察的回归测试 | T026、T027 / CONV-001 |
+| `tests/e2e/audio-stream.spec.ts`、`tests/e2e/language-detection.spec.ts`、`tests/e2e/streaming-subtitles.spec.ts`、`tests/e2e/rejection-cases.spec.ts` | 通过真实浏览器音频链路记录帧进度，断言后续输入期间前序字幕可见，并实际注入批量、原文、非中文、乱序和语义不对应输出 | T014、T019、T024、T025 / CONV-002 |
+| `.ai-delivery/features/002-v1/runtime/developer-functional-run.sh` | 更新本地功能证据，准确描述 WAV、麦克风、AudioWorklet、渐进字幕与反向场景 | T033 / CONV-002 |
+| `.ai-delivery/features/002-v1/reports/implementation.md`、`.ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0034-b01.json` | 追加本 Session 真实证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| FR-004 / AC-003 / CONV-001 | `src/server/adapters/azure-foundry.ts`、`src/server/translation-session.ts` | `tests/contract/foundry.contract.test.ts`、`tests/contract/websocket-session.contract.test.ts` | 模型流未完成时首个 delta 已发送，定向测试通过 |
+| FR-001～FR-003 / AC-001～AC-002 / CONV-002 | `src/client/audio-capture.ts`、`src/server/adapters/deterministic.ts` | `tests/e2e/audio-stream.spec.ts`、`tests/e2e/language-detection.spec.ts` | 提交 WAV 经 fake microphone、`getUserMedia`、AudioWorklet 和 WebSocket 逐帧输入，测试通过 |
+| FR-004～FR-005 / NFR-001 / AC-003～AC-004 / CONV-002 | `src/server/translation-session.ts`、`src/client/subtitle-reducer.ts` | `tests/e2e/streaming-subtitles.spec.ts`、`tests/e2e/rejection-cases.spec.ts` | 后续输入期间前序字幕可见；应用实际不合格输出的反向场景通过 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `npx vitest run --root . tests/contract/foundry.contract.test.ts tests/contract/websocket-session.contract.test.ts`（实现前） | Copilot 沙箱 | 预期失败，退出码 1 | 2 项新增测试分别因缺少 delta callback 和流结束前无 delta 失败 |
+| `npm ci --ignore-scripts`、`npx playwright install --with-deps chromium` | Copilot 沙箱，Node.js 22 | 通过，退出码 0 | 安装 214 个锁定 package 与 Chromium 1254 |
+| `npm run typecheck && npm run build && npm run test:unit` | Copilot 沙箱 | 通过，退出码 0 | TypeScript 无诊断；AudioWorklet 独立 JS asset、客户端和服务端构建成功；4 文件 5 项单元测试通过 |
+| `npm run test:contract` | Copilot 沙箱 | 首次发现 deterministic 时序回归后修复；最终通过，退出码 0 | 最终 9 文件 16 项 contract test 通过 |
+| `DEV_FUNCTIONAL_RESULT_PATH=/tmp/developer-functional-result-final.json bash .ai-delivery/features/002-v1/runtime/developer-functional-run.sh` | Copilot 沙箱，Chromium，提交 WAV，deterministic adapter | 通过，退出码 0 | 10 项 Playwright 测试通过并写出 `passed:true` |
+| `bash -n .ai-delivery/features/002-v1/runtime/developer-functional-run.sh` | Copilot 沙箱 | 通过，退出码 0 | 功能脚本语法有效 |
+| `docker build -t stream-translation-candidate:repair .` | Copilot 沙箱 Docker | 通过，退出码 0 | Node.js 22 多阶段生产镜像构建成功 |
+| `curl /healthz`、`curl /candidate-identity`、`docker exec stream-translation-repair-smoke id -u` | 本地生产容器 | 通过，退出码 0 | 返回 `{"status":"ok"}`、原样 identity，UID 为 `10001` |
+| `npm audit --omit=dev --audit-level=moderate && npm audit --audit-level=moderate` | Copilot 沙箱 | 通过，退出码 0 | 生产与完整依赖均为 0 个已知漏洞 |
+| `git diff --check` 与改动文件敏感模式扫描 | Copilot 沙箱 | 通过，退出码 0 | 无空白错误，未发现凭据或私钥模式 |
+
+### Runtime 与下游门禁就绪制品
+
+根 `Dockerfile` 与 `runtime/deployment.json` 契约保持不变并成功构建。`runtime/developer-functional-run.sh` 继续由声明的 functionalTests 命令执行，现准确记录 Chromium 使用已提交 WAV 驱动 fake microphone，并经过 `getUserMedia`、AudioWorklet、WebSocket、deterministic Speech/Foundry 编排验证输入期间字幕进展和实际反向失败场景。
+
+### 延后平台证据
+
+Coding 沙箱没有 Azure、AKS 或云凭据，本次未执行且未声称真实 Azure Speech、Azure AI Foundry、Workload Identity、不可变 Candidate、AKS 部署或 Independent QA 结果。真实 Foundry stream 的远程增量行为、实际 Speech 自动检测及 IQA-001～IQA-003 仍由候选验证和 Independent QA 产生。
+
+### 剩余风险
+
+本地功能流仍使用明确的 deterministic adapter，只证明应用编排、浏览器音频链路、渐进时序和失败判定。真实 Azure 服务的流式粒度、请求 metadata、Speech/Foundry 配置与公网部署行为只能在下游环境验证；本地结果不构成真实集成通过证据。
+
+### 实施结论
+
+本次已完成 CONV-001 与 CONV-002 的定向修复，新增回归测试先复现失败，随后所有声明的本地静态、构建、单元、contract、Playwright 功能、脚本语法、容器和依赖审计验证通过；结论为 `passed`。

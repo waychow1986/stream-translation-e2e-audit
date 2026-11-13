@@ -92,14 +92,14 @@ export class TranslationSession {
         segment.text,
         this.abortController.signal,
         (delta) => {
-        text += delta;
-        this.emit({
-          type: "subtitle.delta",
-          segmentId: segment.segmentId,
-          revision: ++revision,
-          textDelta: delta,
-          targetLanguage: "zh-CN"
-        });
+          text += delta;
+          this.emit({
+            type: "subtitle.delta",
+            segmentId: segment.segmentId,
+            revision: ++revision,
+            textDelta: delta,
+            targetLanguage: "zh-CN"
+          });
         }
       );
       this.emit({
