@@ -2,18 +2,23 @@
 
 ## 实施就绪状态
 
-`implementationReady: true`
+`implementationReady: false`
 
-设计选择、边界和契约已经闭合。目标 Azure 订阅与区域中的能力、配额和部署标识属于部署及真实环境验证前置条件；若 Speech SDK 无法在单次会话覆盖验收时的完整自动检测语言集合，或 `gpt-sol-6.1` deployment 不支持流式输出并关闭 reasoning，则不得发布候选版本，且不得通过缩减语言范围、替换模型或伪造结果规避。
+当前方案不可进入 Coding。技术可行性核对已得到两个不能由 Coding 解决的结论：
+
+1. Microsoft Azure AI Speech 的 continuous language identification 要求调用方提供候选语言，并明确限制单次连续识别最多 10 个候选语言；Azure Speech 公布的可用于语音识别/语言识别的语言集合超过 10 个。因此，无论 Speech SDK 位于浏览器（候选 A/C）还是服务端（候选 B），单个 recognizer、单次会话都不能同时承载 `AC-002` 要求的“服务实际可自动检测的完整语言集合”。分批 recognizer、预选语言或缩小集合都会改变已批准行为。权威能力依据为 Microsoft Learn 的 [Language identification](https://learn.microsoft.com/azure/ai-services/speech-service/language-identification)（continuous LID 最多 10 个候选语言）与 [Language and voice support for the Speech service](https://learn.microsoft.com/azure/ai-services/speech-service/language-support)（权威支持集合）；核对日期为 2026-11-13。
+2. 已提交制品只给出名称 `gpt-sol-6.1` 和期望参数，没有目标 Azure 订阅、区域、Foundry endpoint、deployment 元数据、API version、模型 capability 响应或一次真实请求结果。因而无法证明目标 deployment 接受所选 API，同时支持流式输出和“关闭 reasoning”。`stream: true` 与 `reasoning.effort: "none"` 只是未经目标 deployment 证实的拟议 payload，不能作为兼容性证据。技术基线又明确要求该兼容性在实施前确认，故当前输入与基线自身的准入条件冲突。
+
+第一个结论构成 `AC-002` 的具体不可实现证据，应由独立 validator 路由为 Specification 上游例外；第二个结论应路由为 technical baseline 治理冲突。两项均未解决前，本文件不把条件式候选架构伪装成可执行方案，也不把换模、降级或参数猜测留给 Coding。
 
 ## 技术上下文（Technical Context）
 
 - 仓库当前只有 AI Delivery 制品和说明文件，没有既有应用代码、依赖清单或部署定义；本方案按绿地 Web App 设计。
 - 产品是浏览器会议字幕：用户手动发起后采集麦克风，连续自动检测源语言、转写、翻译成中文并展示；手动停止或任一处理环节无法继续时终止当前处理，之后仅可手动重新发起。
-- 采用已批准基线候选 A：Node.js 22 LTS、TypeScript、React、Vite、Fastify、浏览器版 Microsoft Azure Speech SDK、Azure AI Foundry `gpt-sol-6.1`、单一 Linux 容器和 Azure Container Apps。
-- 浏览器直接把音频发送给 Azure AI Speech；应用服务不转发音频。服务端只签发短期 Speech token，并代理 finalized recognition segment 到 Azure AI Foundry 的流式翻译。
+- 已批准基线推荐候选 A：Node.js 22 LTS、TypeScript、React、Vite、Fastify、浏览器版 Microsoft Azure Speech SDK、Azure AI Foundry `gpt-sol-6.1`、单一 Linux 容器和 Azure Container Apps；但本轮能力核对已证明其 Speech 单会话边界不能满足 `AC-002`，因此不能作为实施选择。
+- 候选 B 只把同一 Speech SDK 移到服务端，候选 C 只更换托管位置，均不改变 Azure Speech 每个 continuous LID recognizer 最多 10 个候选语言的服务契约；三个批准候选均不可满足当前 `AC-002`。
 - 应用无账户体系、数据库、消息总线和持久化存储。音频、转写和字幕只存在于处理所需的进程内存或浏览器页面内存中。
-- 依赖目标环境在部署前提供 Speech resource、支持流式输出且可关闭 reasoning 的 `gpt-sol-6.1` deployment、Container Apps、Managed Identity/平台 secret，以及验收时权威的完整自动检测语言集合。
+- 已提交 Delivery 制品没有可核验的目标 `gpt-sol-6.1` deployment 能力证据；该缺口不是部署时再决定的资源标识问题，而是批准技术基线要求在实施前闭合的兼容性前提。
 - 没有获批准的延迟、准确率、可用率、并发量、重试次数或保留期限数值；实现和验证不得自行把这些值变为产品门禁。
 
 ## 治理与技术约束
@@ -21,19 +26,20 @@
 - Constitution 的范围受控和简单架构原则决定采用单 SPA、单 BFF、单容器，不增加账户、归档、导出、数据库、队列、Teams 集成或额外云产品。
 - Constitution 的数据安全原则决定长期 Speech key 与 Foundry 身份只在服务端，浏览器仅取得短期 Speech token；会议正文和音频不得进入日志、持久层、测试 fixture 或 telemetry。
 - Constitution 的有效验证原则决定 Playwright 必须在真实 Azure integration 环境验证完整浏览器流程；unit、contract、build、health check 和页面 smoke 只能提供辅助证据。
-- 技术基线决定浏览器直连 Speech、服务端代理 Foundry 翻译、SSE 下行、Azure Container Apps revision 和不可变 Linux image。只有真实浏览器证明该路径无法满足自动语言识别时，才可重新进行受审批的技术基线变更，Coding 不得自行切换候选 B 或 C。
-- `FR-002`/`AC-002` 要求单次流程无需预选语言并覆盖验收时服务可自动检测的完整集合。部署前必须把该权威集合配置给 Speech adapter，并用目标 SDK、订阅和区域验证不存在候选数或 API 能力上限；验证失败是服务能力与已批准范围冲突，不是允许抽样或降级的理由。
+- 技术基线推荐浏览器直连 Speech、服务端代理 Foundry 翻译、SSE 下行、Azure Container Apps revision 和不可变 Linux image；但推荐候选受 continuous LID 的 10 候选语言硬上限约束。候选 B/C 不改变该上限，Coding 不得自行切换候选或并行启动多个 recognizer 规避。
+- `FR-002`/`AC-002` 要求单次流程无需预选语言并覆盖验收时服务可自动检测的完整集合。官方服务契约的候选上限低于完整集合，已构成批准产品行为与服务能力的冲突；必须先由上游修改或澄清产品契约，不能把完整集合配置给一个 recognizer、抽样验收或由实现缩小范围。
+- 技术基线要求 `gpt-sol-6.1` deployment 同时支持所选 API、流式输出和关闭 reasoning，但没有提交目标 deployment 的能力证据。Coding 不得自行采用 `/openai/v1/responses`、`reasoning.effort: "none"`、其他 API version、其他模型或启用 reasoning；须先修复技术基线并提供可核验契约。
 - `.github/workflows/` 由平台拥有，本实现不创建或修改其中任何文件。生产候选必须提供根目录 `Dockerfile` 和本 Feature 的 `runtime/deployment.json`，并使 image、candidate SHA 与 QA target 指向同一不可变候选。
 - 人类可读内容使用简体中文；代码标识符、HTTP/SSE、JSON、环境变量及 Azure 固有名称保留英文。
 
 ## 架构概览（Architecture）
 
-系统包含四个运行组件：
+以下四组件拓扑是已评估候选 A 的结构记录，不是获准实施的架构；由于 `AC-002` 不可实现且模型调用契约未获证实，当前不存在可执行运行拓扑：
 
 1. **React SPA**：呈现未启动、运行中、中断、已停止状态；响应手动发起、停止和重新发起；管理麦克风与 Speech recognizer；按顺序提交 finalized segments；消费翻译 SSE 并展示中文。
 2. **Fastify BFF**：同容器提供 SPA 静态文件、短期 Speech token、运行配置和翻译流接口；校验 Origin、输入 schema 与会话标识；以 Managed Identity 调用 Azure AI Foundry。
 3. **Azure AI Speech**：接收浏览器音频，执行 continuous recognition 与 continuous language identification，向浏览器返回 interim/finalized recognition events。只有 finalized text 可进入翻译。
-4. **Azure AI Foundry `gpt-sol-6.1`**：接收服务端固定翻译指令和单个 finalized segment，经 Responses API 流式返回中文；reasoning 明确关闭。
+4. **Azure AI Foundry `gpt-sol-6.1`（未闭合）**：拟接收服务端固定翻译指令和单个 finalized segment；所用 API、流式事件 schema 及关闭 reasoning 参数尚无目标 deployment 证据，不能固定为实现契约。
 
 单个用户流程的数据路径为：
 
@@ -51,15 +57,16 @@ BFF 不建立跨请求 session store。浏览器拥有会话状态和有序 segm
 | 决策 ID | 选择 | 理由 | 已考虑替代方案 | 来源 |
 |---|---|---|---|---|
 | TD-001 | React + Vite SPA、Fastify BFF、TypeScript、Node.js 22 LTS，npm workspaces 单仓库 | 符合批准基线，前后端共享契约并保持单一部署单元 | 多仓库或前后端独立部署会增加当前范围不需要的交付面 | 技术基线、FR-001～FR-007 |
-| TD-002 | 浏览器版 Azure Speech SDK 直接连接 Azure AI Speech | 音频路径最短，应用服务不接触音频，满足浏览器采集和批准基线 | 服务端 WebSocket 转发音频增加处理面、连接状态与扩缩容复杂度 | INT-003、INT-006、技术基线 |
+| TD-002 | 拒绝候选 A/B/C 作为当前实施架构 | continuous LID 单 recognizer 最多 10 个候选语言，而 `AC-002` 要求同一流程覆盖超过该上限的完整集合；SDK 位置和托管位置不改变服务上限 | A/C 浏览器直连、B 服务端 SDK；三者均受相同上限约束 | FR-002、AC-002、技术基线、Microsoft Speech LID 契约 |
 | TD-003 | BFF 用 Speech key 向 Azure STS 换取短期 token；key 由 Container Apps secret reference 注入 | Speech SDK 可在浏览器连接且不泄露长期凭据 | 把 key 放入 bundle 不安全；服务端转发音频不必要 | Constitution 三、技术基线 |
 | TD-004 | 仅提交 finalized recognition segment，浏览器逐段串行请求翻译 | 避免 interim 修订造成重复/乱序字幕；串行队列保持源语音顺序 | 翻译 interim text 会产生撤回语义；并行翻译会乱序 | FR-003、NFR-001、AC-003 |
-| TD-005 | BFF 通过 Azure AI Foundry OpenAI-compatible Responses API 调用配置的 `gpt-sol-6.1` deployment，`stream: true`、`reasoning.effort: "none"` | 提供持续输出并落实关闭 reasoning 的批准约束 | 非流式调用破坏连续体验；更换模型未经批准 | INT-006、FR-003、技术基线 |
+| TD-005 | 不批准任何 `gpt-sol-6.1` 调用 payload 进入 Coding | 当前没有目标 deployment 对 API、API version、streaming 和关闭 reasoning 参数的能力证据；猜测 `/openai/v1/responses` 与 `reasoning.effort: "none"` 会把关键决定留给 Coding | 非流式调用破坏连续体验；更换模型、启用 reasoning 或猜测参数均违反基线 | INT-006、FR-003、技术基线 |
 | TD-006 | 浏览器以 `fetch` POST 消费 BFF 的 `text/event-stream` | POST 可携带 segment schema，ReadableStream 可处理 SSE 且支持 AbortSignal | 原生 EventSource 仅 GET；WebSocket 对逐段单向结果过重 | FR-003、FR-005、FR-006 |
 | TD-007 | 浏览器有限状态机加 `runGeneration` 隔离生命周期；停止/中断统一 abort 并销毁 recognizer | 可拒绝停止后的晚到事件，明确启停和恢复边界 | 自动重连会违反手动重新发起语义 | FR-004～FR-007 |
 | TD-008 | 不持久化音频、转写、字幕或会话；页面内字幕在当前页面内展示，新一轮发起时清空 | 满足会议期间展示且避免引入未批准归档能力 | 数据库或浏览器持久化扩大范围和会议内容暴露面 | 范围外边界、Constitution 三 |
 | TD-009 | 单一多阶段 Docker image；Fastify 在生产环境提供构建后的 SPA 和 API；Azure Container Apps revision 部署 | 最少组件并支持不可变发布和 revision 回滚 | 独立静态站点增加部署与跨源配置；App Service 不是已选基线 | 技术基线 |
 | TD-010 | Vitest 验证状态机和 adapter contract，Playwright 验证真实完整流程 | 分离快速开发者反馈与 Constitution 强制 E2E 证据 | mock-only 或 smoke test 不能证明用户可见流程 | Constitution 四、测试策略 |
+| TD-011 | 停止实施并分别请求 Specification 上游例外与 technical baseline 修复 | 已有服务硬上限证明 `AC-002` 在全部批准候选中不可实现；模型 deployment 契约又缺少基线要求的准入证据 | 条件式编码、缩减语言、并行 recognizer、换模或参数猜测都会越权 | AC-002、technical-baseline.md 第 17、22 行 |
 
 ## 领域与数据模型
 
@@ -69,7 +76,7 @@ BFF 不建立跨请求 session store。浏览器拥有会话状态和有序 segm
 - **RecognitionSegment**：`sessionId`、`segmentSequence`（从 1 严格递增）、`sourceLanguage`（Speech 返回的 BCP 47 tag）、`text`（finalized transcript）。空白 text 不提交。
 - **SubtitleSegment**：`sessionId`、`segmentSequence`、`sourceLanguage`、`textZh`、`status`（`streaming | completed`）。同一 sequence 的增量文本只追加到当前字幕，完成后不可再修改。
 - **Interruption**：`stage`（`capture | speech | language-detection | translation`）、`code`（稳定内部错误码）、`message`（简体中文用户提示，不含上游正文）、`retryableByRestart`。该对象只描述当前无法继续，不触发自动恢复。
-- **RuntimeConfig**：`speechRegion`、`autoDetectLanguages`。完整语言集合由受控部署配置提供，浏览器不缓存为永久产品清单。
+- **RuntimeConfig（候选记录）**：`speechRegion`、`autoDetectLanguages`。当前不能形成有效配置：完整权威集合超过单 recognizer 的 10 候选上限。
 
 不变量：
 
@@ -116,7 +123,7 @@ tests/
 
 1. UI 在 `idle` 或 `stopped`，或中断条件已由操作者确认消除后接收手动发起。
 2. 状态进入内部 `starting`，生成新 `sessionId`/generation，清空上一轮页面字幕，读取 `/api/config` 并申请 `/api/speech/token`。
-3. 浏览器请求麦克风权限，以完整 `autoDetectLanguages` 创建 continuous language identification 配置和 recognizer；任何一步失败均进入用户可见 `interrupted`。
+3. 原候选要求以完整 `autoDetectLanguages` 创建 continuous language identification recognizer；该步骤因 10 候选上限不可执行，故生命周期不能进入 Coding。
 4. recognizer 成功启动后状态进入 `running`。interim result 可用于 SDK 内部处理，但不显示为中文字幕、不提交翻译。
 
 ### 连续处理
@@ -146,7 +153,7 @@ Speech finalized event 被规范化为 `RecognitionSegment` 并进入 FIFO。每
 }
 ```
 
-`autoDetectLanguages` 必须是部署时确认的非空、去重、完整权威集合；服务启动时校验。该接口不返回 key、endpoint secret 或 Foundry 信息。
+`autoDetectLanguages` 原拟承载非空、去重、完整权威集合；但完整集合不能传给单个 continuous LID recognizer。上游解决 `AC-002` 前不得实现该接口并以截断集合冒充完整配置。
 
 ### `POST /api/speech/token`
 
@@ -175,7 +182,7 @@ Speech finalized event 被规范化为 `RecognitionSegment` 并进入 FIFO。每
 }
 ```
 
-BFF 使用固定 system instruction，要求仅把输入翻译为中文、不得添加解释，并把 transcript 作为独立 user content；调用配置的 Azure AI Foundry `/openai/v1/responses`，指定 deployment `gpt-sol-6.1`、`stream: true`、`reasoning: { "effort": "none" }`。模型 deployment 名称由环境注入但必须等于批准部署，不允许客户端覆盖。服务端以 `DefaultAzureCredential` 获取 Azure Cognitive Services scope 的 token；本地开发仅允许开发者身份链，生产使用 Container Apps Managed Identity。
+BFF 的产品责任仍是仅把输入翻译为中文且不添加解释，并把 transcript 与系统指令结构化分隔。但当前不得实现模型请求：`/openai/v1/responses`、API version、`stream: true`、`reasoning: { "effort": "none" }` 及相应流式事件均未得到目标 `gpt-sol-6.1` deployment capability 证实。修复后的 technical baseline 必须给出可核验 deployment 契约，随后 Technical Solution 才能固定 endpoint、身份 scope、请求字段、流式事件映射和错误语义；Coding 无权选择。
 
 成功响应 `200 text/event-stream; charset=utf-8`，事件按下列 discriminated union 输出，每个 `data` 是单行 JSON：
 
@@ -210,7 +217,7 @@ SSE 开始前的错误统一为：
 
 ### 版本、兼容性与 contract test
 
-当前内部 API 为同容器同版本发布，不单设 URL major version；JSON/SSE schema 由 `packages/contracts` 唯一定义。破坏性契约变更必须让 SPA、BFF 和 contract tests 在同一 candidate 中原子更新。锁文件固定 npm 依赖；Azure Speech SDK、Foundry API 路径或 reasoning 参数升级前必须在真实 integration 环境重新验证 `AC-001`～`AC-007` 和完整语言集合。contract tests 必须覆盖请求校验、SSE framing/顺序、abort 传播、上游错误映射、日志脱敏和非法 Origin。
+当前内部 API 候选为同容器同版本发布，不单设 URL major version；JSON/SSE schema 拟由 `packages/contracts` 唯一定义。由于 Foundry 上游事件契约未闭合且 `AC-002` 不可实现，本节示例不得作为 Coding contract。上游例外和基线修复后，重做 Technical Solution 时必须原子固定 SPA、BFF、provider adapter 与 contract tests。
 
 ## 安全、隐私、身份与 Secret
 
@@ -223,7 +230,7 @@ SSE 开始前的错误统一为：
 
 ## 配置、可观测性与运维
 
-服务启动时一次性校验以下配置：`PORT`、`PUBLIC_ORIGIN`、`SPEECH_REGION`、`SPEECH_KEY`、`SPEECH_AUTO_DETECT_LANGUAGES`、`AZURE_FOUNDRY_ENDPOINT`、`AZURE_FOUNDRY_DEPLOYMENT`。`AZURE_FOUNDRY_DEPLOYMENT` 必须指向批准的 `gpt-sol-6.1` deployment；语言集合必须来自验收环境的权威清单。secret 值不得出现在 `/api/config`、错误或启动摘要中。
+原候选要求服务启动时校验 `PORT`、`PUBLIC_ORIGIN`、`SPEECH_REGION`、`SPEECH_KEY`、`SPEECH_AUTO_DETECT_LANGUAGES`、`AZURE_FOUNDRY_ENDPOINT`、`AZURE_FOUNDRY_DEPLOYMENT`。当前不能生成有效生产配置：语言完整集合超过 recognizer 上限，且 deployment 名称本身不能证明 API/streaming/reasoning capability。不得以启动校验替代前置可行性闭合。
 
 结构化应用日志仅记录时间、level、requestId、随机 sessionId、segmentSequence、状态转换、处理阶段、依赖结果类别、HTTP status、取消标志和不含正文的耗时。明确禁止记录音频、transcript、subtitle、Speech token、key、Authorization header、Foundry request/response body 和麦克风设备标签。当前范围不新增外部 telemetry、告警产品或保留策略；平台标准输出采集由既有托管环境负责。
 
@@ -235,7 +242,7 @@ SSE 开始前的错误统一为：
 ## SLO、限制、扩缩容、重试与恢复
 
 - 唯一获批准的质量边界是会议期间持续产生字幕；没有数值 SLO。integration 和 QA 记录实际端到端行为，但不自行设定延迟、准确率、可用率或吞吐门槛。
-- 支持范围受 Speech 在目标 region 的完整自动检测集合、单会话候选能力、Foundry deployment context/input 限制和 Azure quota 约束。候选能力低于 `AC-002` 时阻止发布，不缩减集合。
+- Speech continuous LID 的单会话候选能力已确认低于 `AC-002` 所需完整集合；这不是发布阶段才测量的容量参数，而是阻止 Coding 的产品/服务契约冲突。
 - BFF 无状态，Container Apps 可按真实并发 HTTP/SSE 连接与已批准 Azure quota 扩缩；初始 min/max replica 和并发触发值必须由部署环境依据 integration 测量与平台治理提供，不能在缺少证据时写入任意容量承诺。
 - 当前流程不自动重试采集、recognition 或翻译，不在 replica 间转移在途 SSE。依赖失败立即中断当前流程，由用户在条件消除后手动重新发起。
 - Speech token 的计划内刷新是凭据续期，不是业务重试；只在当前 generation 有效。Foundry SDK/HTTP client 禁用会掩盖中断的自动内容重放；底层连接建立失败不重复提交 segment。
@@ -257,7 +264,8 @@ Azure 拓扑是一个外部 HTTPS ingress 的 Container App、其 Managed Identi
 | 状态机 unit test | Coding / 平台 CI | Node.js 22 LTS + Vitest | fake timer/内存 adapter；无真实会议正文 | 发起、停止、晚到事件丢弃、中断、重新发起、严格顺序测试 | CI 执行后确认代码级生命周期规则 |
 | API/adapter contract test | Coding / 平台 CI | Fastify inject + 受控 provider stub | 无 Azure secret；stub 仅验证协议 | schema、SSE framing、abort、错误映射、Origin 与日志脱敏测试 | CI 执行后确认内部契约；不替代真实集成 |
 | 构建与容器验证 | 平台 CI | clean runner + container runtime | 声明的 Node/npm 与 image builder | lockfile build、immutable image、非 root、live/ready 辅助检查 | CI 执行后确认候选可构建运行；不证明产品流程 |
-| Speech/Foundry 可行性与集成 | 远程 integration | 已批准目标 Azure 订阅、region 和 Container Apps 环境 | 真实 Speech、权威完整语言集合、`gpt-sol-6.1` deployment、Managed Identity/secret、麦克风 | adapter 诊断、部署清单、Playwright 配置和非敏感语音资产 | 下游确认单会话完整语言集合、流式输出、reasoning 关闭和真实身份可用；失败阻止发布 |
+| Speech 产品可行性 | Technical Solution（已完成核对） | Microsoft Azure AI Speech 权威服务契约 | continuous LID 10 候选上限与权威支持集合 | 不适用；结论先于 Coding | 已确认全部批准候选无法满足 `AC-002`，路由 Specification 上游例外 |
+| Foundry deployment 契约可行性 | technical baseline 治理修复 | 获批目标 Azure deployment 的可核验 capability | 目标订阅/region/deployment、API version、真实 streaming + reasoning-disabled 响应；不得写入 secret | 不适用；结论先于 Coding | 基线修复后才能重做可执行接口设计；当前不得实施 |
 | 完整浏览器功能 E2E | 远程 integration / Playwright | 部署后的同一 immutable candidate | Chromium 麦克风输入、真实 Azure 服务与获批凭据 | `AC-001`、`AC-003`～`AC-007` 的 Playwright 场景和证据采集逻辑 | 下游产生连续字幕、启停、中断、恢复的真实结果 |
 | 全语言范围验收 | Independent QA | 与 candidate 对应的 QA target 和验收时 Azure 权威集合 | 每种语言的可核验非敏感语音、真实 Speech/Foundry | `IQA-002` 数据驱动 Playwright 能力、输入/输出关联格式 | QA 逐一确认全部语言；不得抽样、mock 或用 health 替代 |
 | 发布验证与回滚 | release verification | 同一 image digest 的 Container Apps revision | 平台 deployment identity 和上一已验证 revision | `deployment.json`、health paths、revision/rollback 操作说明 | 下游确认 candidate SHA、image digest、QA target 一致及回滚可执行 |
@@ -266,13 +274,10 @@ Coding 必须在 `runtime/deployment.json` 的 `developerSetupCommands` 声明 c
 
 ## 快速验证指南（Quickstart）
 
-1. 安装 Node.js 22 LTS 和仓库 lockfile 依赖：`npm ci`。
-2. 仅在本地 shell 或获批 secret store 设置所需环境变量；不得创建可提交的含 secret `.env`。
-3. 运行开发者辅助验证：`npm run static-analysis`、`npm run build`、`npm run test`。这些结果不替代 Azure integration 或 Playwright E2E。
-4. 用目标配置启动 production build：`npm run start`，检查 `/health/live` 与 `/health/ready`；health 只证明进程/配置状态。
-5. 在获批 Azure integration 环境部署同一 immutable image，确认 `/api/config` 返回权威完整语言集合且不含 secret，并完成 Speech 单会话完整集合和 Foundry streaming/reasoning 配置预检。
-6. 通过 Playwright 使用真实浏览器麦克风输入依次执行：手动发起与范围内语音产生中文字幕、同一流程连续多段字幕、手动停止后无新增采集/字幕、采集/Speech/语言检测/翻译分别中断可见、条件恢复后手动重新发起且不补发。
-7. Independent QA 取得验收时权威完整语言集合，对每种语言逐一运行 `IQA-002`，并把输入语言、检测结果、中文字幕及 immutable candidate 标识关联保存到平台证据中。
+1. 不执行 scaffolding、依赖安装、编码、部署或 Playwright；当前没有可实施候选。
+2. 独立 validator 核验 Microsoft Speech continuous LID 的 10 候选上限与完整支持集合规模，并把 `AC-002` 冲突路由为 Specification 上游例外。
+3. technical baseline 治理修复必须提交目标 `gpt-sol-6.1` deployment 的非 secret 标识、region、API/API version 及一次可核验的 streaming 且 reasoning-disabled capability 结果；若 deployment 不兼容，则选择须按治理重新批准，不能由 Coding 替换。
+4. 只有批准的 Specification 与 technical baseline 均完成修复后，重新执行 Technical Solution，固定完整可执行契约并再次判断 `implementationReady`；此后才生成开发者与真实环境验证步骤。
 
 ## 支持 Runbook
 
@@ -286,4 +291,5 @@ Coding 必须在 `runtime/deployment.json` 的 `developerSetupCommands` 声明 c
 
 ## 开放决策
 
-无。
+- **OD-001（Specification 上游例外，阻塞）**：`AC-002` 要求同一流程无需预选地覆盖服务完整自动检测语言集合；Azure Speech continuous LID 每个 recognizer 最多 10 个候选语言，而权威集合超过 10 个。全部批准候选均使用同一能力，无法实现。须由上游决定新的可实现产品行为；Technical Solution 不预设缩减集合、预选语言、分批识别或并行 recognizer。
+- **OD-002（technical baseline 治理冲突，阻塞）**：当前没有目标 `gpt-sol-6.1` deployment 对具体 API、API version、流式输出和关闭 reasoning 参数的可核验证据，不能形成 provider contract。须先修复基线准入证据或重新批准模型选择；Coding 不得换模、启用 reasoning 或试错决定生产契约。
