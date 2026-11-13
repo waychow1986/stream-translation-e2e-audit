@@ -127,7 +127,6 @@ synthesizer.speakSsmlAsync(
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
     } finally {
-      result.close();
       synthesizer.close();
     }
   },
