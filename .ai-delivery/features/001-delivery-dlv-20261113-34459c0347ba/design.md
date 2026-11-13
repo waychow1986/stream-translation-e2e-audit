@@ -277,7 +277,7 @@ Coding 必须在 `runtime/deployment.json` 的 `developerSetupCommands` 声明 c
 ## 支持 Runbook
 
 - **配置/readiness 失败**：检查非 secret 配置是否齐全、deployment 是否为 `gpt-sol-6.1`、语言集合是否非空去重；从平台 secret/identity 引用修复，不在日志或工单粘贴值。新 revision 未 ready 时保持上一 revision 流量。
-- **Speech token 或 recognition 中断**：按 requestId/sessionId 查看脱敏阶段日志和 Azure Speech 状态，确认 region、secret reference、quota 与完整语言集合能力。不得把 Speech key发给浏览器或缩减语言集合；恢复后由用户手动重新发起。
+- **Speech token 或 recognition 中断**：按 requestId/sessionId 查看脱敏阶段日志和 Azure Speech 状态，确认 region、secret reference、quota 与完整语言集合能力。不得把 Speech key 发给浏览器或缩减语言集合；恢复后由用户手动重新发起。
 - **语言检测中断**：核对输入语言是否在验收时权威集合及 SDK 是否实际返回 language tag。若 SDK 单会话能力不能覆盖完整集合，停止候选发布并报告服务能力阻塞，不用预选、抽样或默认语言绕过。
 - **翻译中断**：检查 Managed Identity 权限、Foundry endpoint/deployment、quota、streaming 和 reasoning-disabled 支持。不得切换模型、输出原文冒充中文或自动重放 transcript；恢复后手动重新发起。
 - **字幕乱序或停止后出现字幕**：视为 generation/sequence/abort 契约缺陷，停止 rollout，保留不含会议正文的 requestId、sequence 和状态转换证据，回滚上一 revision。
