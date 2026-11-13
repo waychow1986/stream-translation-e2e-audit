@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0018",
+  "stage": "technical-solution",
+  "outcome": "needs_input",
+  "summary": "技术方案已修正 Speech SDK 的 Entra 认证契约，候选部署尚需平台提供目标 Speech 资源的完整 ARM resource ID。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/design.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0018.json"
+    }
+  ],
+  "inputsNeeded": [
+    {
+      "id": "INPUT-SPEECH-RESOURCE-ID",
+      "description": "由候选部署平台从已配置的 Azure AI Speech 资源元数据取得完整 ARM resource ID，并以 AZURE_SPEECH_RESOURCE_ID 注入应用 Pod。",
+      "why": "Azure AI Speech SDK 的 Microsoft Entra 认证要求以 aad#<resourceId>#<accessToken> 作为 authorizationToken；现有平台环境变量画像仅包含 endpoint，应用不得从 endpoint host 猜测 resource ID。",
+      "suggestedProvider": "operator",
+      "targetPath": ".ai-delivery/features/002-v1/runtime/deployment.json",
+      "affectsTaskIds": []
+    }
+  ]
+}
