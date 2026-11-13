@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0051",
+  "stage": "bugfix.assessment",
+  "outcome": "needs_input",
+  "summary": "BUG-001 确认为浏览器语音采集前置条件未满足的环境故障，需提供可执行完整流程的 HTTPS QA 环境后重跑。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/bugfixes/BUG-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0051.json"
+    }
+  ],
+  "inputsNeeded": [
+    {
+      "id": "INPUT-001",
+      "description": "提供部署 Candidate 36ddbb8ba84d84f3958cf7af846c5ab9c24059e7 的受信任 HTTPS QA 云环境，配置实际 Azure AI Speech 与 Azure AI Foundry 依赖，并使 Playwright 浏览器具备麦克风权限及合成音频输入条件。",
+      "why": "当前明文公网 HTTP 环境不能满足浏览器麦克风采集所需的安全上下文，IQA-001 至 IQA-003 因无字幕而超时，无法取得完整产品链路证据。",
+      "suggestedProvider": "operator",
+      "affectsTaskIds": [
+        "IQA-001",
+        "IQA-002",
+        "IQA-003"
+      ]
+    }
+  ],
+  "decisionsNeeded": []
+}
