@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0016",
+  "stage": "task-planning.gate",
+  "outcome": "repair",
+  "summary": "任务计划的主流程与路径总体一致，但固定工具链、输出清理、错误恢复、服务终止和翻译指令安全契约仍缺少可执行的测试先行任务，尚不能批准。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0016.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "TPL-SELF-001",
+      "severity": "high",
+      "owner": "task-planning",
+      "route": "current_stage",
+      "summary": "T001—T002 未完整锁定 design 明确固定的实现栈：任务只点名 Node.js、TypeScript、React、Vite 与 Playwright，未要求锁定 Fastify 5、Speech SDK 1.53、OpenAI JavaScript SDK 7 和 Azure Identity，Coding 可能生成与已批准方案不一致的依赖。",
+      "recommendation": "修订 Setup 任务，逐项纳入 design 固定的运行时与开发依赖及版本约束，并把锁文件中的版本核验纳入先行静态或 contract 证据。"
+    },
+    {
+      "id": "TPL-SELF-002",
+      "severity": "high",
+      "owner": "task-planning",
+      "route": "current_stage",
+      "summary": "仓库不存在根 `.gitignore`，而任务没有落实 design 对 `dist`、`coverage`、`test-results`、`playwright-report` 的替代清理要求；现有任务会生成这些本地输出，却没有获授权路径内的清理动作或完成证据。",
+      "recommendation": "在相关 npm scripts 或测试配置任务中明确构建、测试前后清理 design 列出的本地输出，并增加验证这些输出不会成为交付改动的完成证据；不得越界新增未获 design 授权的根 ignore 文件。"
+    },
+    {
+      "id": "TPL-SELF-003",
+      "severity": "high",
+      "owner": "task-planning",
+      "route": "current_stage",
+      "summary": "客户端边界与恢复行为未被测试先行覆盖：任务未验证或明确实现超 4000 code units 片段终止且不拆分、依赖失败或语言无法确定时清除 current 并保持 fixed、不自动重放或重试，以及用户重新触发后建立新会话。",
+      "recommendation": "增加先行单元或 contract 测试并补充对应实现任务，逐项覆盖 design 已批准的超限、依赖失败、语言无法确定、固定内容保持和手动恢复行为。"
+    },
+    {
+      "id": "TPL-SELF-004",
+      "severity": "high",
+      "owner": "task-planning",
+      "route": "current_stage",
+      "summary": "服务终止契约没有可执行覆盖：T004/T006 只能建立基础启停，T013/T016 只覆盖请求级取消，没有任务验证或实现停止接收新请求、取消在途 Foundry 请求后再关闭监听的既定顺序。",
+      "recommendation": "在 Foundry 路由建立后增加先行服务生命周期 contract 测试，并安排实现任务证明终止期间拒绝新请求、取消全部在途翻译流且最后关闭监听。"
+    },
+    {
+      "id": "TPL-SELF-005",
+      "severity": "high",
+      "owner": "task-planning",
+      "route": "current_stage",
+      "summary": "Foundry adapter 任务仅笼统要求“忠实简体中文翻译指令”，未测试或明确实现 design 规定的语音正文只作为 JSON data 传递、不得执行正文中的指令，无法证明已批准的提示注入边界。",
+      "recommendation": "扩充先行 Foundry adapter contract 测试与 T016，实现并核验固定 system instruction、正文 JSON data 封装以及正文中的指令不改变翻译职责。"
+    }
+  ]
+}
