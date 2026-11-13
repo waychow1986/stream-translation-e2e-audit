@@ -100,12 +100,13 @@ jobs:
             echo "QA plan hash $actual_hash does not match the locked plan $QA_PLAN_HASH." >&2
             exit 1
           fi
-          # The QA branch may only add the locked plan, the QA script and the platform result files
-          # of its agent sessions.
+          # The QA branch may only add the locked plan, the QA script, the evidence of earlier QA runs and
+          # the platform result files of its agent sessions.
           unexpected="$(
             git diff --name-only "$CANDIDATE_SHA..HEAD" |
               grep -Fvx "$qa_plan" |
               grep -Fvx "$qa_script" |
+              grep -Fvx "$ARTIFACT_ROOT/runtime/qa-result.json" |
               grep -Ev "^${ARTIFACT_ROOT//./\.}/\.state/results/[^/]+\.json$" || true
           )"
           if [[ -n "$unexpected" ]]; then
