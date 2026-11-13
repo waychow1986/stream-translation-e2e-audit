@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0055",
+  "stage": "bugfix.assessment",
+  "outcome": "passed",
+  "summary": "BUG-001 已重评：QA 浏览器配置属于测试缺口，Foundry API version 缺失及麦克风失败状态错误属于可修复产品缺陷。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/bugfixes/BUG-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0055.json"
+    }
+  ]
+}
