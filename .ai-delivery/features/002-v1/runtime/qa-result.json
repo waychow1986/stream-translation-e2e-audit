@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "testedCommitSha": "f1b0c9eec6de1fc42091578c7d71b34901ad4df5",
+  "environmentUrl": "http://74.159.182.40",
+  "summary": "Independent QA 未执行：候选环境或测试前置未就绪。",
+  "qaPlanCommitSha": "cf747c4b5a2bf1a5e99a6d30a128ef0785d909c6",
+  "qaPlanHash": "sha256:471c1579e2736069688a4999c93560381075666a20bb70c99884d8e7dab668ca",
+  "defects": [],
+  "testGaps": [],
+  "evidence": [
+    "测试前置失败：Azure Speech TTS 合成未成功（first exit=0 HTTP=404 ；second exit=0 HTTP=404 ）。"
+  ],
+  "bugfixResults": [],
+  "scenarios": []
+}
