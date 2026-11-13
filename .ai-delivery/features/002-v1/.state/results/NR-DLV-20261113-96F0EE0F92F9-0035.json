@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-96F0EE0F92F9-0035",
+  "stage": "convergence",
+  "outcome": "repair",
+  "summary": "当前 Candidate 存在断连与 SIGTERM 资源清理不完整、Azure Speech adapter 关键 contract 证据缺失两项 HIGH 阻塞问题，需返回 Coding 修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/002-v1/reports/convergence.md"
+    },
+    {
+      "path": ".ai-delivery/features/002-v1/.state/results/NR-DLV-20261113-96F0EE0F92F9-0035.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "CONV-003",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "WebSocket 断连和 SIGTERM 路径未保证停止浏览器采集及等待服务端全部活动依赖释放，批准的生命周期不变量未实现且缺少定向测试。",
+      "recommendation": "修复 T015、T030、T032，在连接关闭、错误和进程终止时幂等清理客户端与服务端资源，并补充实际驱动 WebSocket 断连及 SIGTERM 的测试证据。"
+    },
+    {
+      "id": "CONV-004",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "Azure Speech contract 测试仅覆盖纯辅助函数，未执行 adapter 的 SDK 初始授权、continuous language identification、活动 recognizer 令牌刷新、取消与错误映射。",
+      "recommendation": "修复既有 T012、T018，以记录式 SDK/credential fake 增加 Azure Speech adapter contract 测试，覆盖完整授权生命周期、语言识别配置、取消和稳定错误映射且不记录 token。"
+    }
+  ]
+}
