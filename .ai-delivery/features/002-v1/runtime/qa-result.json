@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "testedCommitSha": "36ddbb8ba84d84f3958cf7af846c5ab9c24059e7",
+  "environmentUrl": "http://74.159.182.40",
+  "summary": "Independent QA 因执行环境未就绪而未开始功能验收。",
+  "qaPlanCommitSha": "4ef5b25923741fda51a8cdfd6ac2f87eccec6ef9",
+  "qaPlanHash": "sha256:e55146ccfac5a0fbb0c9e2003f1928ae1f325625d8bb7a8f454aa38693b0960a",
+  "defects": [],
+  "testGaps": [],
+  "evidence": [
+    "测试素材生成前置失败：Azure Speech TTS 未生成合成 WAV。curl: (22) The requested URL returned error: 404 "
+  ],
+  "bugfixResults": [],
+  "scenarios": []
+}
