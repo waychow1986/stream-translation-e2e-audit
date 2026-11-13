@@ -1,0 +1,71 @@
+/* Based on the official sample's light, table-based browser UI. */
+:root {
+    color-scheme: light;
+    font-family: "Helvetica Neue", Helvetica, Arial, "Microsoft YaHei", sans-serif;
+    font-size: 13px;
+    color: #222;
+    --caption-size: 36px;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #fff; }
+main { max-width: 1180px; margin: 26px auto; padding: 0 24px 20px; }
+header { padding-left: 174px; }
+h2 { font-size: 24px; font-weight: 500; margin: 0 0 8px; }
+h3 { font-size: 18px; font-weight: 500; margin: 0 0 14px; }
+.intro, .hint, footer { color: #606060; line-height: 1.6; }
+table { border-collapse: collapse; width: 100%; }
+th { text-align: right; font-weight: 400; width: 174px; padding: 7px 14px 7px 0; vertical-align: top; }
+td { padding: 5px 0; }
+input, select, button, textarea { font: inherit; }
+input[type="url"], input[type="text"], #candidateLanguages, #categoryId {
+    width: min(100%, 600px); padding: 6px 8px; border: 1px solid #999; border-radius: 2px;
+}
+#endpoint { background: #f6f6f6; color: #555; }
+input[readonly] { background: #f6f6f6; color: #555; }
+.hint { display: inline-block; margin: 4px 0 2px; }
+input[type="radio"] { margin: 0 3px 0 0; accent-color: #0078d4; }
+button { padding: 6px 11px; background: #f3f3f3; border: 1px solid #999; border-radius: 2px; color: #222; cursor: pointer; }
+button:hover:not(:disabled) { background: #e5edf4; border-color: #0078d4; }
+button.primary { color: #fff; background: #0078d4; border-color: #0064ad; }
+button.primary:hover:not(:disabled) { background: #005a9e; }
+button:disabled { opacity: .5; cursor: default; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, a:focus-visible, #captionContent:focus-visible {
+    outline: 2px solid #0078d4; outline-offset: 3px;
+}
+select { max-width: 260px; padding: 5px; margin: 0 4px; }
+.file-choice { margin-left: 12px; }
+input[type="file"] { max-width: 260px; margin-top: 6px; }
+summary { cursor: pointer; padding: 3px 0; }
+details label { display: block; margin: 8px 0 5px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; }
+#status { margin: 12px 0 0 174px; padding: 10px 12px; background: #f3f3f3; border: 1px solid #ddd; }
+#error { margin: 8px 0 0 174px; padding: 12px; border: 1px solid #ba2424; background: #fff4f4; color: #9f1717; white-space: pre-wrap; overflow-wrap: anywhere; }
+#captionPanel { margin: 14px 0 16px 174px; padding: 14px 20px; min-height: 236px; border: 1px solid #999; background: #fff; }
+.caption-heading { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; color: #606060; }
+#captionContent { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: var(--caption-size); line-height: 1.6; overflow-wrap: anywhere; height: clamp(240px, 34vh, 420px); overflow-y: auto; overflow-anchor: none; scrollbar-gutter: stable; }
+#captionContent p { margin: 16px 0; }
+.caption-entry { white-space: pre-wrap; color: #222; }
+.caption-note { color: #9f1717; font-size: 14px; }
+#emptyCaption { color: #888; font-size: .75em; }
+.caption-legend { color: #777; font-size: 12px; margin: 10px 0 0; }
+#exitFullscreen { display: none; }
+#captionPanel:fullscreen { margin: 0; padding: 4vh 5vw; border: 0; display: flex; flex-direction: column; }
+#captionPanel:fullscreen #captionContent { font-size: max(var(--caption-size), 4vw); flex: 1; min-height: 0; height: auto; }
+#captionPanel:fullscreen #exitFullscreen { display: inline-block; }
+textarea { display: block; width: 100%; resize: vertical; padding: 10px; line-height: 1.6; border: 1px solid #999; border-radius: 2px; background: #fff; color: #222; }
+#statusDiv { color: #555; font-family: Consolas, "Microsoft YaHei", monospace; font-size: 12px; }
+footer { margin: 18px 0 0 174px; font-size: 12px; }
+a { color: #0067b8; }
+[hidden] { display: none !important; }
+@media (max-width: 720px) {
+    main { margin: 18px auto; padding: 0 14px; }
+    header { padding: 0; }
+    h2 { font-size: 21px; }
+    table, tbody, tr, th, td { display: block; width: 100%; }
+    th { text-align: left; padding: 10px 0 0; color: #555; }
+    #status, #error, #captionPanel, footer { margin-left: 0; }
+    .file-choice { display: inline-block; margin: 8px 0 0; }
+    select { max-width: 190px; }
+    #captionPanel { padding: 12px; }
+    #captionContent { font-size: min(var(--caption-size), 7vw); }
+}

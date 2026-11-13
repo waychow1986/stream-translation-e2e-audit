@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>实时中文字幕 — STT + GPT mini</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/vendor/microsoft.cognitiveservices.speech.sdk.bundle-min.js" defer></script>
+    <script src="/app.js" type="module"></script>
+</head>
+<body>
+<main>
+    <header>
+        <h2>实时中文字幕 · STT + GPT mini</h2>
+        <p class="intro">Azure 连续语言识别 → GPT 流式翻译。稳定短语提前上屏，当前草稿原位更新，已确认历史保持不变。</p>
+    </header>
+    <form id="settingsForm">
+        <table aria-label="语音和翻译配置">
+            <tr><th><label for="endpoint">Speech Endpoint</label></th><td><input id="endpoint" type="url" readonly></td></tr>
+            <tr><th><label for="region">Region</label></th><td><input id="region" type="text" readonly></td></tr>
+            <tr><th><label for="modelDeployment">Translation model</label></th><td><input id="modelDeployment" type="text" readonly> <span class="hint">reasoning.effort = none</span></td></tr>
+            <tr><th><label for="candidateLanguages">Candidate languages</label></th><td>
+                <input id="candidateLanguages" type="text" value="en-US, zh-CN" required>
+                <span class="hint">连续检测候选语言；检测为中文时直接显示，不再调用模型。</span>
+            </td></tr>
+            <tr><th><label for="microphoneSources">Audio source</label></th><td><select id="microphoneSources"><option value="">默认麦克风</option></select></td></tr>
+            <tr><th>Medical glossary</th><td><span id="glossaryStatus">正在加载…</span> <button id="reloadGlossary" type="button">刷新术语表</button>
+                <div class="hint">客户术语暂未提供；medical-glossary.json 初始为空。修改后下次翻译自动读取。</div>
+            </td></tr>
+            <tr><th></th><td class="actions">
+                <button id="scenarioStartButton" class="primary" type="submit" disabled>Start / 开始</button>
+                <button id="scenarioStopButton" type="button" disabled>Stop / 停止并完成尾句</button>
+                <button id="cancelButton" type="button" disabled>取消待译</button>
+                <button id="fullscreenButton" type="button">字幕全屏</button>
+                <button id="fontSmaller" type="button" aria-label="减小字幕字号">A−</button>
+                <button id="fontLarger" type="button" aria-label="增大字幕字号">A＋</button>
+                <button id="exportButton" type="button">导出确认字幕</button>
+                <button id="clearButton" type="button">清空</button>
+            </td></tr>
+        </table>
+    </form>
+    <div id="status" role="status">正在连接本机服务…</div>
+    <div id="error" role="alert" hidden></div>
+    <section id="captionPanel" aria-label="中文字幕">
+        <div class="caption-heading"><span id="captionState">尚未开始</span><span id="detectedLanguage">等待语言识别</span><button id="exitFullscreen" type="button">退出全屏</button></div>
+        <div id="captionContent" aria-live="polite" aria-atomic="false" tabindex="0" aria-label="字幕记录，可滚动查看">
+            <p id="emptyCaption">点击 Start，允许麦克风访问后开始讲话。</p>
+            <div id="captionEntries"></div>
+        </div>
+        <p class="caption-legend">当前未确认字幕可原位调整，同一段只显示一份。识别和翻译均完成后固定，并计入导出。　<span id="latency">模型首字耗时：—（不含语音识别）</span></p>
+    </section>
+    <table aria-label="识别原文、确认字幕和运行事件">
+        <tr><th><label for="sourceText">Original</label></th><td><textarea id="sourceText" rows="5" readonly placeholder="识别原文，仅保留在本页内存中"></textarea></td></tr>
+        <tr><th><label for="phraseDiv">Results</label></th><td><textarea id="phraseDiv" rows="7" readonly placeholder="仅显示已确认中文字幕"></textarea></td></tr>
+        <tr><th><label for="statusDiv">Events</label></th><td><textarea id="statusDiv" rows="4" readonly></textarea></td></tr>
+    </table>
+    <footer>仅限本机浏览器使用。不保存录音，不自动保存字幕；音频送至 Azure Speech，原文及匹配术语送至 Azure 模型。
+        当前 GlobalStandard 部署不保证推理固定在东南亚。医药字幕须人工复核，尤其是剂量、否定与不良事件。
+        UI 沿用 <a href="https://github.com/Azure-Samples/cognitive-services-speech-sdk/tree/master/samples/js/browser" target="_blank" rel="noreferrer">微软官方 Speech 浏览器示例</a>风格。
+    </footer>
+</main>
+</body>
+</html>
