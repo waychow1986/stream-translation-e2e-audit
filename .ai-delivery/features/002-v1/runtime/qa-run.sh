@@ -66,11 +66,16 @@ while (( SECONDS < deadline )); do
 
   if [[ $health_exit -eq 0 && "$health_status" == "200" &&
         $identity_exit -eq 0 && "$identity_status" == "200" ]]; then
-    if node --input-type=module "$work_dir/identity.json" "$QA_DELIVERY_ID" "$QA_CANDIDATE_SHA" <<'NODE'
+    if HEALTH_PATH="$work_dir/health.json" IDENTITY_PATH="$work_dir/identity.json" \
+      node --input-type=module <<'NODE'
 import { readFileSync } from "node:fs";
-const [path, deliveryId, candidateSha] = process.argv.slice(2);
-const identity = JSON.parse(readFileSync(path, "utf8"));
-process.exit(identity.deliveryId === deliveryId && identity.candidateSha === candidateSha ? 0 : 1);
+const health = JSON.parse(readFileSync(process.env.HEALTH_PATH, "utf8"));
+const identity = JSON.parse(readFileSync(process.env.IDENTITY_PATH, "utf8"));
+process.exit(
+  health.status === "ok" &&
+  identity.deliveryId === process.env.QA_DELIVERY_ID &&
+  identity.candidateSha === process.env.QA_CANDIDATE_SHA ? 0 : 1
+);
 NODE
     then
       ready=true
@@ -105,6 +110,8 @@ if [[ $token_exit -ne 0 || -z "$speech_token" ]]; then
   exit 0
 fi
 
+printf 'oauth2-bearer = "%s"\n' "$speech_token" > "$work_dir/speech-token.curl"
+chmod 600 "$work_dir/speech-token.curl"
 cat > "$work_dir/first.ssml" <<'EOF'
 <speak version="1.0" xml:lang="en-US"><voice name="en-US-JennyNeural">Welcome to the meeting.</voice></speak>
 EOF
@@ -117,8 +124,8 @@ synthesize() {
   local ssml_path="$1"
   local wav_path="$2"
   curl --silent --show-error --connect-timeout 15 --max-time 90 \
+    --config "$work_dir/speech-token.curl" \
     --request POST "$tts_url" \
-    --header "Authorization: ******" \
     --header "Content-Type: application/ssml+xml" \
     --header "X-Microsoft-OutputFormat: riff-16khz-16bit-mono-pcm" \
     --header "User-Agent: AIDelivery-Independent-QA" \
@@ -130,6 +137,7 @@ first_status="$(synthesize "$work_dir/first.ssml" "$work_dir/first.wav" 2>"$work
 first_exit=$?
 second_status="$(synthesize "$work_dir/second.ssml" "$work_dir/second.wav" 2>"$work_dir/second.err")"
 second_exit=$?
+rm -f "$work_dir/speech-token.curl"
 unset speech_token
 
 if [[ $first_exit -ne 0 || "$first_status" != "200" ||
