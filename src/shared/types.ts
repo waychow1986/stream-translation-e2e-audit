@@ -34,5 +34,4 @@ export type ServerEvent =
 
 export interface TranslationResult {
   requestId: string;
-  deltas: string[];
 }

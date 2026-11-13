@@ -1,8 +1,4 @@
-declare global {
-  interface Window {
-    __TEST_PCM_FRAMES__?: number[][];
-  }
-}
+import workletUrl from "./audio-worklet.ts?worker&url";
 
 export class AudioCapture {
   private stream?: MediaStream;
@@ -16,17 +12,9 @@ export class AudioCapture {
 
   async start(send: (frame: ArrayBuffer) => void): Promise<void> {
     this.stopped = false;
-    if (window.__TEST_PCM_FRAMES__) {
-      for (const frame of window.__TEST_PCM_FRAMES__) {
-        if (this.stopped) break;
-        send(Uint8Array.from(frame).buffer);
-        await new Promise((resolve) => setTimeout(resolve, 150));
-      }
-      return;
-    }
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     this.context = new AudioContext({ sampleRate: 16_000 });
-    await this.context.audioWorklet.addModule(new URL("./audio-worklet.ts", import.meta.url));
+    await this.context.audioWorklet.addModule(workletUrl);
     const source = this.context.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.context, "pcm16-processor");
     this.node.port.onmessage = ({ data }: MessageEvent<ArrayBuffer>) => send(data);

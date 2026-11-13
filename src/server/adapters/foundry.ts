@@ -11,22 +11,35 @@ export interface FoundryRequest {
   signal: AbortSignal;
 }
 
-export type FoundryRequestExecutor = (request: FoundryRequest) => Promise<TranslationResult>;
+export type TranslationDeltaHandler = (delta: string) => void;
+
+export type FoundryRequestExecutor = (
+  request: FoundryRequest,
+  onDelta: TranslationDeltaHandler
+) => Promise<TranslationResult>;
 
 export interface TranslationAdapter {
-  translate(text: string, signal: AbortSignal): Promise<TranslationResult>;
+  translate(
+    text: string,
+    signal: AbortSignal,
+    onDelta: TranslationDeltaHandler
+  ): Promise<TranslationResult>;
 }
 
 export class FoundryTranslator implements TranslationAdapter {
   constructor(private readonly execute: FoundryRequestExecutor) {}
 
-  translate(text: string, signal: AbortSignal): Promise<TranslationResult> {
+  translate(
+    text: string,
+    signal: AbortSignal,
+    onDelta: TranslationDeltaHandler
+  ): Promise<TranslationResult> {
     return this.execute({
       system: FOUNDRY_SYSTEM_INSTRUCTION,
       input: text,
       stream: true,
       reasoning_effort: "none",
       signal
-    });
+    }, onDelta);
   }
 }
