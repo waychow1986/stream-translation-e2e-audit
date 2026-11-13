@@ -1,10 +1,21 @@
 import { defineConfig } from "@playwright/test";
+import { fileURLToPath } from "node:url";
+
+const audioFixture = fileURLToPath(new URL("./tests/fixtures/audio/iqa-en-multisegment.wav", import.meta.url));
 
 export default defineConfig({
   testDir: "tests/e2e",
   timeout: 30_000,
   use: {
     baseURL: "http://127.0.0.1:3000",
+    permissions: ["microphone"],
+    launchOptions: {
+      args: [
+        "--use-fake-ui-for-media-stream",
+        "--use-fake-device-for-media-stream",
+        `--use-file-for-fake-audio-capture=${audioFixture}`
+      ]
+    },
     trace: "retain-on-failure"
   },
   webServer: {

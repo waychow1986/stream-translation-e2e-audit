@@ -86,10 +86,12 @@ export class TranslationSession {
 
   private async translate(segment: RecognitionSegment): Promise<void> {
     try {
-      const result = await this.adapters.translator.translate(segment.text, this.abortController.signal);
       let revision = 0;
       let text = "";
-      for (const delta of result.deltas) {
+      const result = await this.adapters.translator.translate(
+        segment.text,
+        this.abortController.signal,
+        (delta) => {
         text += delta;
         this.emit({
           type: "subtitle.delta",
@@ -98,7 +100,8 @@ export class TranslationSession {
           textDelta: delta,
           targetLanguage: "zh-CN"
         });
-      }
+        }
+      );
       this.emit({
         type: "subtitle.final",
         segmentId: segment.segmentId,

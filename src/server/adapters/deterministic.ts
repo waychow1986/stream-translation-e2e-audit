@@ -14,6 +14,7 @@ export class RecordingSpeechAdapter implements SpeechAdapter {
   cancelled = false;
   private onSegment?: (segment: RecognitionSegment) => void;
   private emitted = 0;
+  private frames = 0;
 
   async start(onSegment?: (segment: RecognitionSegment) => void): Promise<void> {
     this.onSegment = onSegment;
@@ -22,7 +23,9 @@ export class RecordingSpeechAdapter implements SpeechAdapter {
   push(frame: Buffer): void {
     if (this.cancelled) throw new Error("Adapter cancelled");
     this.audio = Buffer.concat([this.audio, frame]);
-    if (frame.length >= 320 && this.emitted < testSegments.length) {
+    this.frames++;
+    const shouldEmit = this.emitted === 0 || (this.emitted === 1 && this.frames >= 106);
+    if (frame.length >= 320 && shouldEmit && this.emitted < testSegments.length) {
       const source = testSegments[this.emitted]!;
       const detectedLanguage = frame[0] === 9 ? "zh-CN" : "en-US";
       const segment = {
@@ -46,11 +49,12 @@ export class RecordingSpeechAdapter implements SpeechAdapter {
 
 export function deterministicAdapters(): SessionAdapters {
   const speech = new RecordingSpeechAdapter();
-  const translator = new FoundryTranslator(async ({ input }) => {
+  const translator = new FoundryTranslator(async ({ input }, onDelta) => {
     const index = testSegments.findIndex((segment) => segment.english === input);
+    const deltas = testSegments[Math.max(0, index)]!.chinese;
+    for (const delta of deltas) onDelta(delta);
     return {
-      requestId: `test-double:model-${index + 1}`,
-      deltas: testSegments[Math.max(0, index)]!.chinese
+      requestId: `test-double:model-${index + 1}`
     };
   });
   return { speech, translator };
