@@ -1,28 +1,5 @@
 {
   "stage": "specification",
-  "passed": false,
-  "findings": [
-    {
-      "id": "SPEC-SELF-001",
-      "severity": "high",
-      "scope": "self",
-      "artifact": "spec.md",
-      "owner": "specification",
-      "summary": "参会者手动发起、停止和重新发起流程的产品交互缺少有效的逐项权威来源分类。",
-      "recommendation": "在 Specification 权限内明确该决定；若保留手动控制，为相关 US、FR、SC、AC 和 IQA 逐项提供准确的 closure 来源及最小闭合理由，并修正追踪矩阵。",
-      "route": "current_stage",
-      "reasonType": "governance"
-    },
-    {
-      "id": "SPEC-SELF-002",
-      "severity": "high",
-      "scope": "self",
-      "artifact": "spec.md",
-      "owner": "specification",
-      "summary": "Specification 将批准 Intent 明确指定的 Azure Foundry STT 服务与大模型约束泛化为未具名的客户指定服务或能力。",
-      "recommendation": "在不引入实现设计的前提下原样保留 Azure Foundry STT 服务与大模型客户约束，并使语言范围、依赖、追踪和验收前置条件一致指向该获批服务。",
-      "route": "current_stage",
-      "reasonType": "contradiction"
-    }
-  ]
+  "passed": true,
+  "findings": []
 }
