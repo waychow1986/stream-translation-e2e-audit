@@ -2,14 +2,83 @@
   "passed": false,
   "testedCommitSha": "8f23a795b014acf174497f1c11b5641f1de2739c",
   "environmentUrl": "http://20.7.107.68",
-  "summary": "Independent QA 未执行：候选或 QA 执行前置未就绪。",
-  "qaPlanCommitSha": "dd6e456a976658df909eb7f8def4f8fd656e47d8",
-  "qaPlanHash": "sha256:c6b401c912ef7da2358facbd04e4763e6b0f0a2a1afb47ceffe97b34be9e2d4c",
-  "defects": [],
+  "summary": "Independent QA 完成：0/6 个场景通过。",
+  "qaPlanCommitSha": "9715a887107f9520c395a1bfcd3bdab18bdecff1",
+  "qaPlanHash": "sha256:7fe939667d5986bd4256f4bad4800763b449d03da21f0688adaad6fb56a42379",
+  "defects": [
+    "IQA-001：英文发言未在 final 前形成并修订中文草稿。会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；final 前观察到 0 次不同中文草稿，首现 无ms。",
+    "IQA-002：英文完整译文未正确替换、固定或抵抗后续片段改写。会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；观察到 0 个 final 翻译请求和 0 个固定片段；首段在第二段后保持同一标识与文本。",
+    "IQA-003：中文原文未流式直显，或中文路径调用了翻译接口。会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；发言期间观察到 0 次不同中文原文变化，翻译接口请求为 0。",
+    "IQA-004：字幕未按固定视窗底部追加、自动跟随或保持既有固定内容。会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；固定片段=0，唯一标识=0，视窗高度 320→320px，内容高度=320px，位于底部=true。",
+    "IQA-005：英文流式字幕未满足 6 秒/5 秒/3 秒实时性边界。首条草稿=Infinityms；final 时点=0ms；草稿更新间隔=[]ms；final 到 fixed=无ms；草稿早于 final=false。",
+    "IQA-006：中文完整原文未最终固定或被后续片段改写。会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；固定中文片段=0；首段在后续片段期间保持同一标识与原文，翻译接口请求为 0。"
+  ],
   "testGaps": [],
   "evidence": [
-    "Azure Speech TTS 未能生成有效 RIFF/WAV 测试素材，验收场景未启动。"
+    "候选 health 与 /candidate-identity 已就绪，deliveryId 和 candidateSha 与 QA 注入值逐字一致。",
+    "QA OIDC 已通过真实 Azure Speech TTS 合成四份 RIFF/WAV 素材；未记录访问令牌。",
+    "连续英文检查点：会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0。",
+    "连续英文控制台诊断：Connecting to 'wss://eastus2.stt.speech.microsoft.com/speech/universal/v2?GenerateRedirectResponse=true&Ocp-Apim-Custom-Domain-Name=foundry-aidh-dev-ivmw2d.cognitiveservices.azure.com&language=en-US&format=simple&lidEnabled=true&Authorization=Bearer%20aad%23%2Fsubscriptions%2F679df40d-869d-49fc-9497",
+    "双片段英文检查点：会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0。",
+    "双片段英文控制台诊断：Connecting to 'wss://eastus2.stt.speech.microsoft.com/speech/universal/v2?GenerateRedirectResponse=true&Ocp-Apim-Custom-Domain-Name=foundry-aidh-dev-ivmw2d.cognitiveservices.azure.com&language=en-US&format=simple&lidEnabled=true&Authorization=Bearer%20aad%23%2Fsubscriptions%2F679df40d-869d-49fc-9497",
+    "双片段中文检查点：会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0。",
+    "双片段中文控制台诊断：Connecting to 'wss://eastus2.stt.speech.microsoft.com/speech/universal/v2?GenerateRedirectResponse=true&Ocp-Apim-Custom-Domain-Name=foundry-aidh-dev-ivmw2d.cognitiveservices.azure.com&language=en-US&format=simple&lidEnabled=true&Authorization=Bearer%20aad%23%2Fsubscriptions%2F679df40d-869d-49fc-9497",
+    "多片段英文检查点：会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0。",
+    "多片段英文控制台诊断：Connecting to 'wss://eastus2.stt.speech.microsoft.com/speech/universal/v2?GenerateRedirectResponse=true&Ocp-Apim-Custom-Domain-Name=foundry-aidh-dev-ivmw2d.cognitiveservices.azure.com&language=en-US&format=simple&lidEnabled=true&Authorization=Bearer%20aad%23%2Fsubscriptions%2F679df40d-869d-49fc-9497"
   ],
   "bugfixResults": [],
-  "scenarios": []
+  "scenarios": [
+    {
+      "id": "IQA-001",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；final 前观察到 0 次不同中文草稿，首现 无ms。"
+    },
+    {
+      "id": "IQA-002",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；观察到 0 个 final 翻译请求和 0 个固定片段；首段在第二段后保持同一标识与文本。"
+    },
+    {
+      "id": "IQA-003",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech"
+      ],
+      "evidence": "会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；发言期间观察到 0 次不同中文原文变化，翻译接口请求为 0。"
+    },
+    {
+      "id": "IQA-004",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；固定片段=0，唯一标识=0，视窗高度 320→320px，内容高度=320px，位于底部=true。"
+    },
+    {
+      "id": "IQA-005",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech",
+        "Azure AI Foundry"
+      ],
+      "evidence": "首条草稿=Infinityms；final 时点=0ms；草稿更新间隔=[]ms；final 到 fixed=无ms；草稿早于 final=false。"
+    },
+    {
+      "id": "IQA-006",
+      "passed": false,
+      "externalServices": [
+        "Azure Speech"
+      ],
+      "evidence": "会话启动=true；Speech token HTTP=200；Speech WebSocket=0 个/0 帧；翻译请求=0，HTTP=无；控制台错误=1；网络失败=0；固定中文片段=0；首段在后续片段期间保持同一标识与原文，翻译接口请求为 0。"
+    }
+  ]
 }
