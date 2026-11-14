@@ -243,13 +243,13 @@ async function runFlow(name, audioName, expectedFixed, timeoutMs) {
         try {
           mode = request.postDataJSON().mode;
         } catch {}
-        flow.translationRequests.push({ mode, at: Date.now() });
+        flow.translationRequests.push({ mode, at: performance.now() });
       }
     });
     page.on("response", (response) => {
       const path = new URL(response.url()).pathname;
       if (path === "/api/speech-token" || path === "/api/translations") {
-        flow.responses.push({ path, status: response.status(), at: Date.now() });
+        flow.responses.push({ path, status: response.status(), at: performance.now() });
       }
     });
     page.on("websocket", (socket) => {
@@ -257,7 +257,7 @@ async function runFlow(name, audioName, expectedFixed, timeoutMs) {
         host: new URL(socket.url()).host,
         sent: 0,
         received: 0,
-        openedAt: Date.now()
+        openedAt: performance.now()
       };
       socket.on("framesent", () => checkpoint.sent += 1);
       socket.on("framereceived", () => checkpoint.received += 1);
@@ -271,12 +271,12 @@ async function runFlow(name, audioName, expectedFixed, timeoutMs) {
       scrollHeight: element.scrollHeight,
       scrollTop: element.scrollTop
     }));
-    flow.startedAt = Date.now();
+    flow.startedAt = performance.now();
     await page.getByRole("button", { name: "开始字幕" }).click();
 
-    const deadline = Date.now() + timeoutMs;
+    const deadline = performance.now() + timeoutMs;
     let lastSignature = "";
-    while (Date.now() < deadline) {
+    while (performance.now() < deadline) {
       const buttonText = clean(await page.getByRole("button").textContent());
       if (buttonText === "停止字幕") flow.runningObserved = true;
       const captions = await viewport.locator("[data-caption-state]").evaluateAll((elements) =>
@@ -296,7 +296,7 @@ async function runFlow(name, audioName, expectedFixed, timeoutMs) {
             previous.segmentId !== caption.segmentId ||
             previous.text !== caption.text
           ) {
-            flow.timeline.push({ ...caption, at: Date.now() });
+            flow.timeline.push({ ...caption, at: performance.now() });
           }
         }
         lastSignature = signature;
