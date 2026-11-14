@@ -2,7 +2,7 @@
 
 ## 执行边界与前置
 
-执行脚本先在五分钟内重试 DNS、TLS、`QA_HEALTH_PATH` 与 `/candidate-identity`，并逐字校验候选返回的 `deliveryId`、`candidateSha`。随后使用 QA OIDC 身份和 Azure Speech TTS 独立合成可重复的英中 WAV，通过 Playwright Chromium 的虚拟麦克风、麦克风授权与 HTTP 安全上下文参数输入真实候选页面。就绪、身份、素材生成、结果汇总及 JSON 写入均为执行步骤，不另建 IQA 任务。首次 QA 不含 Bugfix 复测，`bugfixResults` 必须为空数组。
+执行脚本先在五分钟内重试 DNS、TLS、`QA_HEALTH_PATH` 与 `/candidate-identity`，并逐字校验候选返回的 `deliveryId`、`candidateSha`。随后使用 QA OIDC 身份取得 Azure Speech Entra token，按 `aad#<AZURE_SPEECH_RESOURCE_ID>#<access token>` 格式交给已安装的 Speech SDK，由 SDK 独立合成并校验可重复的英中 RIFF/WAV，再通过 Playwright Chromium 的虚拟麦克风、麦克风授权与 HTTP 安全上下文参数输入真实候选页面。就绪、身份、素材生成、结果汇总及 JSON 写入均为执行步骤，不另建 IQA 任务。首次 QA 不含 Bugfix 复测，`bugfixResults` 必须为空数组。
 
 脚本为用户流程设置语音 token、Speech WebSocket、翻译请求/响应、字幕 DOM 状态及视窗位置检查点；仅记录状态、时点、计数、HTTP 状态和脱敏错误，不记录 token。准备失败时不执行验收场景；单个产品路径失败后使用独立浏览器上下文继续其余场景。
 
