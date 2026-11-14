@@ -290,3 +290,57 @@ Playwright 1.65.1 的 Ubuntu 26.04 安装映射已本地验证，但 Candidate w
 ### 实施结论
 
 候选验证中 Playwright 1.56.1 不支持 Ubuntu 26.04 的根因已通过锁定升级至 1.65.1 定向修复；兼容性复现、全部必做本地验证和安全审计均通过，无待输入、待决定或受阻任务，本次结果为 `passed`。未声称远程 Candidate checks 已通过。
+
+## Coding Session NR-DLV-20261113-BCCA3652FB86-0031-b01
+
+### 实施范围
+
+本次为 `coding-repair` 模式，定向修复 `CONV-005`：在既有 `T014`、`T017`—`T019` 范围内，使超过 4000 UTF-16 code units 的英文 interim 与 final 共用会话终止边界。先补充生命周期回归测试，再以最小生产改动在英文识别进入 current 或调度器前终止会话；未改变正常长度字幕、产品行为、任务文本或 runtime 契约。
+
+### 完成与受阻任务
+
+`CONV-005` 对应的超限 interim 会话终止缺口已修复并重验。任务在 Session 起点已全部勾选，本次没有由 `[ ]` 改为 `[x]` 的任务，因此 `progress.completedTaskIds` 为空；没有未勾选任务或受阻项，`progress.blockedTaskIds` 为空。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `tests/unit/session-lifecycle.test.ts` | 新增 4001 code units 英文 interim 回归测试，覆盖 recognizer 与计时器清理、旧事件忽略、current 清除、fixed 保留和手动新会话恢复 | T014 / CONV-005 |
+| `src/client/session-controller.ts` | 在英文 interim/final 进入片段状态和调度前统一执行 4000 code units 上限检查，超限立即终止会话 | T017—T019 / CONV-005 |
+| `.ai-delivery/features/003-v1/reports/implementation.md`、`.ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0031-b01.json` | 追加本 Session 真实修复证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| FR-004—FR-006、FR-008 / TD-004—TD-007 / CONV-005 | `src/client/session-controller.ts`、`src/client/translation-scheduler.ts`、`src/client/caption-reducer.ts` | `tests/unit/session-lifecycle.test.ts` | 4001 code units interim 立即终止且不提交翻译，资源只清理一次，current 清除，fixed 保留，旧会话事件不处理 |
+| T014、T017—T019 恢复边界 | `src/client/session-controller.ts` | `tests/unit/session-lifecycle.test.ts` | 终止后不自动重试或重放；仅新建 controller 所代表的用户手动新会话可以继续翻译并固定字幕 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `node --test --experimental-strip-types tests/unit/session-lifecycle.test.ts`（安装依赖前） | Copilot 沙箱 | 未执行到测试 | 工作区初始缺少 `node_modules`，报告 Speech SDK package 缺失；随后按 runtime setup 安装锁定依赖 |
+| `npm ci --ignore-scripts && node --test --experimental-strip-types tests/unit/session-lifecycle.test.ts`（修复前） | Copilot 沙箱 | 预期失败 | 新增超限 interim 场景中旧事件仍触发 1 次翻译请求，断言期望 0、实际 1，复现 `CONV-005` |
+| `node --test --experimental-strip-types tests/unit/session-lifecycle.test.ts`（修复后） | Copilot 沙箱 | 通过 | 5/5 生命周期聚焦测试通过 |
+| `npm run staticAnalysis`、`npm run build` | Copilot 沙箱 | 通过 | TypeScript 严格检查退出码 0；Vite 7.3.8 生产构建成功并清理输出 |
+| `npm run developerTests`、`npm run integrationTests` | Copilot 沙箱 | 通过 | 22/22 unit 与 contract 测试、8/8 contract integration 测试通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright-1.65.1 npm run functionalTests` | Copilot 沙箱 | 通过 | 8/8 协议级本地 Playwright 辅助场景通过 |
+| `npm audit --audit-level=moderate` | Copilot 沙箱 | 通过 | 0 个已知漏洞 |
+| `git diff --check`、改动内容 secret pattern 扫描、runtime `bash -n`/`jq` 定向检查 | Copilot 沙箱 | 通过 | 无空白错误、未发现凭据或私钥模式、脚本语法与必要 runtime 声明有效 |
+
+### Runtime 与下游门禁就绪制品
+
+根目录 `Dockerfile`、`runtime/deployment.json` 和 `runtime/developer-functional-run.sh` 本次无需修改。8080 端口、`/healthz`、`/candidate-identity`、无私网、无 PostgreSQL 和五类验证命令声明保持不变；Candidate checks 可发现并执行包含新增回归场景的 developer tests。
+
+### 延后平台证据
+
+本 Session 未访问 Azure、AKS 或部署 URL。不可变候选上的 Candidate checks、镜像构建与部署、真实 Speech/Foundry 行为、`IQA-001`—`IQA-006`、`NFR-002` 时限、Independent QA 与 UAT 结果继续由下游平台产生；本地协议 fake 和构建结果不替代这些证据。
+
+### 剩余风险
+
+本地确定性测试已覆盖超限 interim 的客户端资源与状态边界；真实 Azure Speech 是否产生超长单片段及其事件节奏仍只能由部署环境观察。正常长度语音的真实 Speech/Foundry 延迟和获批 6 秒、5 秒、3 秒边界仍须由下游黑盒验证。
+
+### 实施结论
+
+`CONV-005` 已在批准路径内完成 test-first 定向修复：英文 interim 与 final 超限均会终止会话、清理资源和 current、保留 fixed、忽略旧事件，并仅允许用户手动建立新会话恢复。全部必做本地验证通过，无待输入、待决定或受阻任务，本次结果为 `passed`；未声称下游真实环境已通过。

@@ -23,6 +23,7 @@ function controllerHarness(
   let state = initialState;
   let callbacks: SpeechSessionCallbacks | undefined;
   let stopCount = 0;
+  let clearTimeoutCount = 0;
   const requests: TranslationRequest[] = [];
   const controller = new SessionController(
     (action) => {
@@ -46,7 +47,9 @@ function controllerHarness(
         await translate(request, signal, onEvent);
       },
       setTimeout: () => 1,
-      clearTimeout: () => undefined
+      clearTimeout: () => {
+        clearTimeoutCount += 1;
+      }
     }
   );
   return {
@@ -57,7 +60,8 @@ function controllerHarness(
     },
     requests,
     state: () => state,
-    stopCount: () => stopCount
+    stopCount: () => stopCount,
+    clearTimeoutCount: () => clearTimeoutCount
   };
 }
 
@@ -127,15 +131,31 @@ for (const failure of ["ndjson", "fetch"] as const) {
   });
 }
 
-test("oversized translation terminates resources and only a new user session can translate", async () => {
-  const failed = controllerHarness(async () => assert.fail("oversized text must not be translated"));
+test("oversized English interim terminates resources, preserves fixed captions and requires a new session", async () => {
+  let existing = captionReducer(initialCaptionState, {
+    type: "recognizing",
+    segmentId: "fixed",
+    language: "zh-CN",
+    sourceText: "保留",
+    revision: 1
+  });
+  existing = captionReducer(existing, {
+    type: "recognizedChinese",
+    segmentId: "fixed",
+    sourceText: "保留",
+    revision: 2
+  });
+  const failed = controllerHarness(async () => assert.fail("oversized text must not be translated"), existing);
   await failed.controller.start();
-  failed.callbacks().onRecognition({ text: "x".repeat(4_001), language: "en-US", final: true });
+  failed.callbacks().onRecognition({ text: "x".repeat(4_001), language: "en-US", final: false });
   await settle();
-  failed.callbacks().onRecognition({ text: "ignored", language: "en-US", final: true });
+  failed.callbacks().onRecognition({ text: "ignored stale event", language: "en-US", final: true });
   await settle();
   assert.equal(failed.stopCount(), 1);
+  assert.ok(failed.clearTimeoutCount() > 0);
   assert.equal(failed.requests.length, 0);
+  assert.equal(failed.state().current, null);
+  assert.equal(failed.state().fixedSegments[0]?.displayText, "保留");
 
   const restarted = controllerHarness(async (_request, _signal, onEvent: (event: TranslationEvent) => void) => {
     onEvent({ type: "delta", text: "新会话" });

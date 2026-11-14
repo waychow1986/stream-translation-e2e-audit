@@ -117,6 +117,10 @@ export class SessionController {
       return;
     }
     const language = result.language as SourceLanguage;
+    if (route === "translate" && result.text.length > 4000) {
+      await this.terminate();
+      return;
+    }
     if (!this.segmentId) {
       this.segmentNumber += 1;
       this.segmentId = String(this.segmentNumber);
