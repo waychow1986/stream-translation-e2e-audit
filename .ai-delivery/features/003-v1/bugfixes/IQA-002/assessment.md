@@ -3,44 +3,44 @@
 ## 缺陷信息
 
 - **Bug ID：** IQA-002
-- **QA Run ID：** 本次 Independent QA（关联 `NR-DLV-20261113-BCCA3652FB86-0039`，未提供独立 Run ID）
-- **Candidate SHA：** `8f23a795b014acf174497f1c11b5641f1de2739c`
+- **QA Run ID：** 本次 Independent QA（未提供独立 Run ID）
+- **Candidate SHA：** `7083a475b0626d45854acf935c12caa2f49a2421`
 - **环境：** `http://20.7.107.68`
 
 ## 问题报告
 
-双片段英文输入没有产生 final 翻译或固定字幕，无法验证首段是否由完整译文替换、固定并抵抗第二段改写。
+双片段英文输入没有产生 final 翻译或固定字幕，无法验证首段完整译文替换、固定及后续不可变。
 
 ## 预期与实际行为
 
-预期首段 final 后由完整中文译文替换草稿并固定，第二段不改变首段。实际 Speech WebSocket 为 0 个、翻译请求和固定片段均为 0。
+依据 `FR-006`、`FR-008`、`AC-003` 与 `AC-004`，首段 final 应以完整译文替换草稿并固定，第二段不得改写首段。实际 Speech WebSocket 为 1 个但 0 帧，final 翻译请求和固定片段均为 0。
 
 ## 复现步骤与证据
 
-在候选环境授权媒体并播放双片段英文合成音频。会话启动与 token `200` 成功，但控制台报告连接 `wss://eastus2.stt.speech.microsoft.com/...`，没有建立 Speech WebSocket 或发送帧，因而没有 final、翻译请求或固定片段。
+QA 启动候选会话并尝试播放双片段英文合成 WAV。会话、token 与 WebSocket 建立成功，无控制台错误或网络失败；WebSocket 没有任何音频帧，所以没有 recognition final、翻译请求或固定片段。
 
 ## 影响追踪
 
-影响 `US-002`、`FR-006`、`FR-008`、`SC-002`、`AC-003`、`AC-004`、场景 `IQA-002`，以及任务 `T004`、`T011`、`T012`、`T015`、`T018`、`T019`。
+影响 `US-002`、`FR-006`、`FR-008`、`SC-002`、`AC-003`、`AC-004`、场景 `IQA-002`，以及任务 `T003`、`T011`、`T012`、`T015`、`T018`、`T019`。
 
 ## 根因分析
 
-`src/server/security.ts` 的 CSP 只允许配置的 Speech 自定义端点 origin；SDK 实际连接区域 STT WSS origin，浏览器因此在识别前阻止 WebSocket。安全 contract 测试没有断言该运行时连接目标。token 路径已成功，`session-controller` 的 final 翻译与 reducer 固定逻辑未收到任何识别事件；0 个 final 请求和固定片段是同一上游产品缺陷的后果，当前无证据证明这些下游组件另有缺陷。
+当前连接已越过上一轮 CSP 阻塞，但 QA 只记录 WAV 已生成，未证明 WAV 经 Playwright fake microphone 实际送入浏览器。产品的默认麦克风 adapter 在 0 帧条件下不可能产生 final；`session-controller` 的 final 翻译及 reducer 固定路径均未收到输入。媒体设备、文件注入、权限和 HTTP 地址安全上下文均可由 QA 浏览器启动配置控制，故这是测试缺口。现有证据不支持把未执行的 final 或固定逻辑判为产品缺陷。
 
 ## 限定范围的修复方案
 
-限定修改 CSP Speech 连接白名单及对应 contract 测试，使真实 SDK 区域 WSS 目标可连接，不改变翻译、reducer 或测试输入接口。
+仅修订 QA 脚本，建立并预检可被 Chromium 采集的双片段 fake microphone 输入，配置权限与 HTTP 测试地址安全上下文，并以 WebSocket 非零帧作为进入 final 断言的前置门槛；不得修改翻译、reducer 或产品接口。
 
 ## 回归风险
 
-错误的通配范围会扩大出站权限，区域硬编码则损害可部署性。修复后需真实重跑双片段英文，核验 final 请求、同一片段原位替换、固定标识和后续不可变。
+无帧门槛缺失会继续产生连锁误报；音频片段边界不清会导致 Speech 不产生两个 final。QA 修订后需保留每段输入、final 翻译、固定 ID/文本及第二段期间不变的连续证据。
 
 ## 未解决证据
 
-当前阻塞发生在识别前，尚未获得 Foundry final 流和 reducer 固定行为的真实证据；修复后需重新评估可能被掩盖的下游故障。
+当前没有真实 final、Foundry 流或固定状态证据；修订 QA 后须重跑，非零帧条件下出现的新失败应重新评估。
 
 ## 分类与修复就绪决策
 
-- **classification：** `product_defect`
+- **classification：** `test_gap`
 - **ready_for_fix：** `true`
-- **决策依据：** 候选产品 CSP 阻止其 SDK 必需连接，代码和运行证据一致，QA 脚本无法通过输入配置合法绕过产品 CSP。
+- **决策依据：** 可观察失败由 QA 可配置的媒体注入未产生帧直接解释，尚无产品 final 链路失败证据。
