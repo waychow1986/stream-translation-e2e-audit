@@ -9,11 +9,16 @@ export function isSameOrigin(origin: string | undefined, host: string | undefine
   }
 }
 
-export function installSecurity(app: FastifyInstance, speechEndpoint: string): void {
+export function contentSecurityPolicy(speechEndpoint: string): string {
   const speechOrigin = new URL(speechEndpoint).origin;
+  const speechWebSocketOrigin = speechOrigin.replace("https:", "wss:");
+  return `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ${speechOrigin} ${speechWebSocketOrigin} wss://*.stt.speech.microsoft.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`;
+}
+
+export function installSecurity(app: FastifyInstance, speechEndpoint: string): void {
   app.addHook("onRequest", async (request, reply) => {
     reply.headers({
-      "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ${speechOrigin} ${speechOrigin.replace("https:", "wss:")}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`,
+      "content-security-policy": contentSecurityPolicy(speechEndpoint),
       "referrer-policy": "no-referrer",
       "x-content-type-options": "nosniff"
     });
