@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0046",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已完成六个已批准验收场景的 Independent QA 计划与执行脚本，并补强素材时长及字幕语义证据判定。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/tasks-qa.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/runtime/qa-run.sh"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0046.json"
+    }
+  ]
+}

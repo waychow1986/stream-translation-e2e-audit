@@ -172,6 +172,15 @@ for (const [ssmlName, wavName] of inputs) {
   if (wav.length <= 4096 || wav.subarray(0, 4).toString("ascii") !== "RIFF") {
     throw new Error(`${wavName} 不是有效的 RIFF/WAV 素材（${wav.length} bytes）`);
   }
+  const byteRate = wav.readUInt32LE(28);
+  const dataOffset = wav.indexOf(Buffer.from("data"));
+  if (!byteRate || dataOffset < 0 || dataOffset + 8 > wav.length) {
+    throw new Error(`${wavName} 缺少可判定时长的 PCM WAV 头`);
+  }
+  const durationSeconds = wav.readUInt32LE(dataOffset + 4) / byteRate;
+  if (wavName === "en-continuous.wav" && durationSeconds < 15) {
+    throw new Error(`${wavName} 时长 ${durationSeconds.toFixed(2)} 秒，不满足至少 15 秒的场景前置`);
+  }
 }
 NODE
 then
@@ -199,6 +208,8 @@ const evidence = [
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const clean = (value) => String(value ?? "").replace(/\s+/g, " ").slice(0, 300);
 const hasHan = (value) => /[\u3400-\u9fff]/u.test(value);
+const includesTerms = (value, terms) => terms.every((term) => value.includes(term));
+const includesAnyTerm = (value, terms) => terms.some((term) => value.includes(term));
 
 async function runFlow(name, audioName, expectedFixed, timeoutMs) {
   const flow = {
@@ -371,6 +382,7 @@ async function main() {
     continuous.runningObserved &&
     continuousDrafts.length >= 2 &&
     continuousDrafts.every(({ text }) => hasHan(text)) &&
+    continuousDrafts.some(({ text }) => includesAnyTerm(text, ["早上", "上午", "大家", "会议", "字幕"])) &&
     continuousFinalRequest &&
     continuousDrafts[0].at < continuousFinalRequest.at;
   const iqa1Detail = continuous.error
@@ -388,8 +400,8 @@ async function main() {
     firstEnglishFixed &&
     englishFixed[0].segmentId === firstEnglishFixed.segmentId &&
     englishFixed[0].text === firstEnglishFixed.text &&
-    hasHan(englishFixed[0].text) &&
-    hasHan(englishFixed[1].text);
+    includesTerms(englishFixed[0].text, ["项目", "会议"]) &&
+    includesTerms(englishFixed[1].text, ["下周", "交付", "计划"]);
   scenarios.push(scenario(
     "IQA-002",
     Boolean(iqa2Passed),
@@ -405,6 +417,7 @@ async function main() {
     !chineseTwo.error &&
     chineseDrafts.length >= 2 &&
     chineseDrafts.every(({ text }) => hasHan(text)) &&
+    chineseDrafts.some(({ text }) => includesAnyTerm(text, ["今天", "实时", "字幕"])) &&
     chineseTwo.translationRequests.length === 0;
   scenarios.push(scenario(
     "IQA-003",
@@ -468,6 +481,8 @@ async function main() {
     firstChineseFixed &&
     chineseFixed[0].segmentId === firstChineseFixed.segmentId &&
     chineseFixed[0].text === firstChineseFixed.text &&
+    includesTerms(chineseFixed[0].text, ["今天", "实时", "字幕"]) &&
+    includesTerms(chineseFixed[1].text, ["下周", "交付", "计划"]) &&
     chineseTwo.translationRequests.length === 0;
   scenarios.push(scenario(
     "IQA-006",
