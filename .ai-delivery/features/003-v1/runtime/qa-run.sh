@@ -75,8 +75,8 @@ if (( SECONDS >= ready_deadline )); then
   exit 0
 fi
 
-if [[ -z "${AZURE_SPEECH_ENDPOINT:-}" ]]; then
-  write_blocker "QA Runner 未提供合成素材所需的 AZURE_SPEECH_ENDPOINT，验收场景未启动。"
+if [[ -z "${AZURE_SPEECH_ENDPOINT:-}" || -z "${AZURE_SPEECH_RESOURCE_ID:-}" ]]; then
+  write_blocker "QA Runner 未提供合成素材所需的 AZURE_SPEECH_ENDPOINT 或 AZURE_SPEECH_RESOURCE_ID，验收场景未启动。"
   exit 0
 fi
 
@@ -123,30 +123,61 @@ cat >"$work/en-many.ssml" <<'SSML'
 <speak version="1.0" xml:lang="en-US"><voice name="en-US-JennyNeural">First we welcome everyone.<break time="900ms"/>Second we review the agenda.<break time="900ms"/>Third we discuss customer needs.<break time="900ms"/>Fourth we inspect project progress.<break time="900ms"/>Fifth we confirm the design.<break time="900ms"/>Sixth we review testing.<break time="900ms"/>Seventh we discuss delivery risks.<break time="900ms"/>Eighth we assign the actions.<break time="900ms"/>Ninth we answer questions.<break time="900ms"/>Tenth we confirm the schedule.<break time="900ms"/>Eleventh we summarize decisions.<break time="900ms"/>Finally we close the meeting.</voice></speak>
 SSML
 
-synthesize() {
-  local ssml="$1"
-  local output="$2"
-  local auth_header
-  local auth_scheme
-  printf -v auth_scheme '\102\145\141\162\145\162'
-  printf -v auth_header 'Authori%s: %s %s' 'zation' "$auth_scheme" "$speech_access_token"
-  curl --fail --silent --show-error \
-    --connect-timeout 15 --max-time 90 \
-    -H "$auth_header" \
-    -H "Content-Type: application/ssml+xml" \
-    -H "X-Microsoft-OutputFormat: riff-16khz-16bit-mono-pcm" \
-    -H "User-Agent: aidelivery-independent-qa" \
-    --data-binary "@$ssml" \
-    "${AZURE_SPEECH_ENDPOINT%/}/cognitiveservices/v1" \
-    --output "$output"
-  [[ "$(head -c 4 "$output")" == "RIFF" && "$(stat -c %s "$output")" -gt 4096 ]]
+if ! SPEECH_ACCESS_TOKEN="$speech_access_token" QA_AUDIO_DIR="$work" \
+  node --input-type=module 2>"$work/tts.err" <<'NODE'
+import fs from "node:fs";
+import * as speechSdk from "microsoft-cognitiveservices-speech-sdk";
+
+const endpoint = new URL(process.env.AZURE_SPEECH_ENDPOINT);
+const speechConfig = speechSdk.SpeechConfig.fromEndpoint(endpoint);
+speechConfig.authorizationToken =
+  `aad#${process.env.AZURE_SPEECH_RESOURCE_ID}#${process.env.SPEECH_ACCESS_TOKEN}`;
+speechConfig.speechSynthesisOutputFormat =
+  speechSdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm;
+
+const audioDir = process.env.QA_AUDIO_DIR;
+const inputs = [
+  ["en-continuous.ssml", "en-continuous.wav"],
+  ["en-two.ssml", "en-two.wav"],
+  ["zh-two.ssml", "zh-two.wav"],
+  ["en-many.ssml", "en-many.wav"]
+];
+
+function synthesize(ssmlPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    const synthesizer = new speechSdk.SpeechSynthesizer(speechConfig);
+    synthesizer.speakSsmlAsync(
+      fs.readFileSync(ssmlPath, "utf8"),
+      (result) => {
+        synthesizer.close();
+        if (result.reason !== speechSdk.ResultReason.SynthesizingAudioCompleted) {
+          reject(new Error(`Speech SDK synthesis reason=${result.reason}; ${result.errorDetails || "无详细信息"}`));
+          return;
+        }
+        fs.writeFileSync(outputPath, Buffer.from(result.audioData));
+        resolve();
+      },
+      (error) => {
+        synthesizer.close();
+        reject(error);
+      }
+    );
+  });
 }
 
-if ! synthesize "$work/en-continuous.ssml" "$work/en-continuous.wav" ||
-  ! synthesize "$work/en-two.ssml" "$work/en-two.wav" ||
-  ! synthesize "$work/zh-two.ssml" "$work/zh-two.wav" ||
-  ! synthesize "$work/en-many.ssml" "$work/en-many.wav"; then
-  write_blocker "Azure Speech TTS 未能生成有效 RIFF/WAV 测试素材，验收场景未启动。"
+for (const [ssmlName, wavName] of inputs) {
+  const wavPath = `${audioDir}/${wavName}`;
+  await synthesize(`${audioDir}/${ssmlName}`, wavPath);
+  const wav = fs.readFileSync(wavPath);
+  if (wav.length <= 4096 || wav.subarray(0, 4).toString("ascii") !== "RIFF") {
+    throw new Error(`${wavName} 不是有效的 RIFF/WAV 素材（${wav.length} bytes）`);
+  }
+}
+NODE
+then
+  tts_error="$(tr '\n' ' ' <"$work/tts.err" | cut -c1-400)"
+  unset speech_access_token
+  write_blocker "Azure Speech SDK TTS 未能生成有效 RIFF/WAV 测试素材，验收场景未启动：${tts_error:-无诊断信息}"
   exit 0
 fi
 unset speech_access_token

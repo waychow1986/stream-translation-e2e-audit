@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0037",
+  "stage": "qa.plan",
+  "outcome": "passed",
+  "summary": "已改用 Speech SDK 的 Entra 认证格式修复合成 WAV 前置，并保留六个已批准场景的完整 QA 计划。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/tasks-qa.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/runtime/qa-run.sh"
+    }
+  ]
+}
