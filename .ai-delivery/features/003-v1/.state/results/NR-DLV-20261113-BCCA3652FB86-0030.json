@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0030",
+  "stage": "convergence",
+  "outcome": "repair",
+  "summary": "当前候选因英文超限 interim 未按批准生命周期终止而需要返回 Coding 修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/reports/convergence.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0030.json"
+    }
+  ],
+  "findings": [
+    {
+      "id": "CONV-005",
+      "severity": "high",
+      "owner": "coding",
+      "route": "current_stage",
+      "summary": "英文 interim 超过 4000 code units 时 scheduler 仅静默停止调度，未终止会话和清理 current。",
+      "recommendation": "在既有 T014、T017—T019 范围内统一 interim/final 超限终止路径，并补充覆盖资源清理、旧事件忽略、fixed 保留及手动新会话恢复的 test-first 证据。"
+    }
+  ]
+}
