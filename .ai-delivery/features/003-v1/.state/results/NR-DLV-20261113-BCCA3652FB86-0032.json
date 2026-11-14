@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0032",
+  "stage": "convergence",
+  "outcome": "passed",
+  "summary": "CONV-005 已完成定向修复且本轮改动未引入新的阻塞问题，复检通过。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/reports/convergence.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0032.json"
+    }
+  ],
+  "findings": []
+}
