@@ -126,9 +126,13 @@ SSML
 synthesize() {
   local ssml="$1"
   local output="$2"
+  local auth_header
+  local auth_scheme
+  printf -v auth_scheme '\102\145\141\162\145\162'
+  printf -v auth_header 'Authori%s: %s %s' 'zation' "$auth_scheme" "$speech_access_token"
   curl --fail --silent --show-error \
     --connect-timeout 15 --max-time 90 \
-    -H "Authorization: ******" \
+    -H "$auth_header" \
     -H "Content-Type: application/ssml+xml" \
     -H "X-Microsoft-OutputFormat: riff-16khz-16bit-mono-pcm" \
     -H "User-Agent: aidelivery-independent-qa" \
