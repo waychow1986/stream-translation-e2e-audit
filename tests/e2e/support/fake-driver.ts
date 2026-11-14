@@ -124,7 +124,7 @@ function recognitionInputs(scenario: Scenario): RecognitionInput[] {
     return [
       { delay: 0, text: "hello ", language: "en-US", final: false },
       { delay: 700, text: "hello world ", language: "en-US", final: false },
-      { delay: 1_400, text: "hello world", language: "en-US", final: true }
+      { delay: 1_800, text: "hello world", language: "en-US", final: true }
     ];
   }
   if (scenario === "continuousEnglish") {

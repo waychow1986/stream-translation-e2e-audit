@@ -13,7 +13,7 @@ test("approved stack and clean validation scripts are locked", async () => {
     "microsoft-cognitiveservices-speech-sdk": "1.53.0",
     "@azure/identity": "4.14.1",
     openai: "7.2.0",
-    "@playwright/test": "1.56.1"
+    "@playwright/test": "1.65.1"
   };
   for (const [name, version] of Object.entries(expected)) {
     assert.equal(lock.packages[`node_modules/${name}`].version, version);

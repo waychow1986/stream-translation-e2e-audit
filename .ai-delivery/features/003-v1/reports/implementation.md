@@ -233,3 +233,60 @@ Coding 沙箱无 Azure 或部署凭据，因此未执行真实 Speech continuous
 ### 实施结论
 
 `CONV-004` 指定的 15 秒连续英文输入、全部可见草稿更新记录及独立 6/5/3 秒断言已在 `T015` 批准范围内补齐；全部必做本地验证通过，无待输入、待决定或受阻任务，本次结果为 `passed`。
+
+## Coding Session NR-DLV-20261113-BCCA3652FB86-0029-b01
+
+### 实施范围
+
+本次为 `coding-repair` 模式，定向修复 Candidate checks 在 Ubuntu 26.04 执行平台自动 `playwright install --with-deps chromium` 时，锁定的 Playwright 1.56.1 不支持该平台而退出的问题。修复仅升级 Playwright 及其锁文件，补充锁定版本回归检查，并调整受新版浏览器调度影响的既有英文协议测试输入间隔；未改变生产代码、产品行为、任务文本或 runtime 声明。
+
+### 完成与受阻任务
+
+Candidate checks 的 Playwright 安装兼容性问题已修复并完成本地定向复现。任务在 Session 起点已全部勾选，本次没有由 `[ ]` 改为 `[x]` 的任务，因此 `progress.completedTaskIds` 为空；没有未勾选任务或受阻项，`progress.blockedTaskIds` 为空。
+
+### 变更文件
+
+| 路径 | 变更 | 来源任务 |
+|---|---|---|
+| `package.json`、`package-lock.json` | 将 `@playwright/test`、`playwright` 与 `playwright-core` 从 1.56.1 锁定升级至支持 Ubuntu 26.04 的 1.65.1 | T001 / Candidate checks 修复 |
+| `tests/contract/toolchain.test.ts` | 将工具链回归检查更新为 Playwright 1.65.1 | T002 / Candidate checks 修复 |
+| `tests/e2e/support/fake-driver.ts` | 为新版 Chromium 保留第二次草稿提交与 final 之间的确定性处理窗口，不改变断言或产品时限 | T015 / Candidate checks 修复 |
+| `.ai-delivery/features/003-v1/reports/implementation.md`、`.ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0029-b01.json` | 追加本次修复证据并提交结果契约 | Coding 结果契约 |
+
+### 需求与场景覆盖
+
+| 来源（FR / AC / IQA） | 实现路径 | 测试路径 | 结果 |
+|---|---|---|---|
+| TD-009、验证环境责任矩阵 / Candidate checks | `package.json`、`package-lock.json` | `tests/contract/toolchain.test.ts` | Ubuntu 26.04 平台覆盖与 Chromium 安装解析通过 |
+| FR-004—FR-006 / AC-002—AC-004 / IQA-001、IQA-002 | 既有生产路径未修改 | `tests/e2e/english-captions.spec.ts`、`tests/e2e/support/fake-driver.ts` | 新版 Playwright 下英文草稿修订及 final 固定场景通过 |
+| FR-001—FR-011 / AC-001—AC-009 / IQA-001—IQA-006 | `src/client/`、`src/server/`、`src/shared/` | `tests/unit/`、`tests/contract/`、`tests/e2e/` | 22/22 developer、8/8 integration、8/8 本地 Playwright 辅助测试通过 |
+
+### 执行命令与结果
+
+| 命令 | 环境 | 结果 | 证据 |
+|---|---|---|---|
+| `node --test --experimental-strip-types tests/contract/toolchain.test.ts`（升级前） | Copilot 沙箱 | 预期失败 | 锁文件实际为 1.56.1，不满足新增的 1.65.1 兼容版本检查 |
+| `npm install --save-dev --save-exact @playwright/test@1.65.1 --ignore-scripts` | Copilot 沙箱 | 通过 | 安装 199 个 package，审计为 0 个漏洞 |
+| `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu26.04-x64 PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright-1.65.1 npx playwright install --with-deps chromium` | Ubuntu 24.04 Copilot 沙箱，以 Playwright 平台覆盖模拟 Candidate 检查 | 通过 | Ubuntu 26.04 依赖表和 Chromium build v1255 均成功解析，命令退出码 0 |
+| `npm run staticAnalysis`、`npm run build` | Copilot 沙箱 | 通过 | TypeScript 严格检查退出码 0；Vite 7.3.8 生产构建成功并清理输出 |
+| `npm run developerTests`、`npm run integrationTests` | Copilot 沙箱 | 通过 | 22/22 unit 与 contract 测试、8/8 contract integration 测试通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright-1.65.1 npm run functionalTests`（首次） | Copilot 沙箱 | 失败后已修复 | 新版浏览器下英文第二次 draft 与 final 的协议输入间隔过短，1 项失败、7 项通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright-1.65.1 npx playwright test tests/e2e/english-captions.spec.ts -g "English draft revises"` | Copilot 沙箱 | 通过 | 调整协议输入间隔后聚焦场景 1/1 通过 |
+| `PLAYWRIGHT_BROWSERS_PATH=/tmp/ms-playwright-1.65.1 npm run functionalTests`（修复后） | Copilot 沙箱 | 通过 | 8/8 协议级本地 Playwright 辅助场景通过 |
+| `npm audit --audit-level=moderate`、runtime `bash -n`/`jq` 定向检查、`git diff --check` | Copilot 沙箱 | 通过 | 0 个已知漏洞；runtime 脚本和声明有效；无空白错误 |
+
+### Runtime 与下游门禁就绪制品
+
+`runtime/deployment.json` 和 `runtime/developer-functional-run.sh` 无需修改；Candidate checks 仍按既有声明安装锁定依赖并执行五类验证。根目录 Playwright 依赖现已锁定到 1.65.1，包含 Ubuntu 26.04 的依赖与 Chromium 下载映射；`Dockerfile`、8080 端口、`/healthz`、`/candidate-identity`、无私网和无 PostgreSQL 声明保持不变。
+
+### 延后平台证据
+
+本 Session 无法在真实 GitHub Actions Ubuntu 26.04 Candidate runner 或 AKS 部署环境执行。不可变候选上的平台自动 Playwright 安装、Candidate checks、镜像构建、部署、真实 Azure Speech/Foundry、Independent QA 与 UAT 结果均由后续平台阶段产生；本地平台覆盖命令不冒充远程通过证据。
+
+### 剩余风险
+
+Playwright 1.65.1 的 Ubuntu 26.04 安装映射已本地验证，但 Candidate workflow 的真实 runner 结果仍待平台重跑。真实 Speech interim 节奏、Foundry 延迟及 `NFR-002` 的 6 秒、5 秒、3 秒黑盒边界仍须由下游真实环境验证。
+
+### 实施结论
+
+候选验证中 Playwright 1.56.1 不支持 Ubuntu 26.04 的根因已通过锁定升级至 1.65.1 定向修复；兼容性复现、全部必做本地验证和安全审计均通过，无待输入、待决定或受阻任务，本次结果为 `passed`。未声称远程 Candidate checks 已通过。
