@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0039",
+  "stage": "bugfix.assessment",
+  "outcome": "passed",
+  "summary": "已完成 6 个独立 QA 缺陷评估，确认候选 CSP 阻断 Azure Speech SDK 区域 WebSocket 是共同的产品缺陷，均可进入限定修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-002/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-003/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-004/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-005/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-006/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0039.json"
+    }
+  ]
+}
