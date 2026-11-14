@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "testedCommitSha": "8f23a795b014acf174497f1c11b5641f1de2739c",
+  "environmentUrl": "http://20.7.107.68",
+  "summary": "Independent QA 未执行：候选或 QA 执行前置未就绪。",
+  "qaPlanCommitSha": "dd6e456a976658df909eb7f8def4f8fd656e47d8",
+  "qaPlanHash": "sha256:c6b401c912ef7da2358facbd04e4763e6b0f0a2a1afb47ceffe97b34be9e2d4c",
+  "defects": [],
+  "testGaps": [],
+  "evidence": [
+    "Azure Speech TTS 未能生成有效 RIFF/WAV 测试素材，验收场景未启动。"
+  ],
+  "bugfixResults": [],
+  "scenarios": []
+}
