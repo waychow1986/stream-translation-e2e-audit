@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0040",
+  "stage": "bugfix.fix",
+  "outcome": "passed",
+  "summary": "已受限放行 Azure Speech 区域 STT WebSocket，六项共享根因缺陷完成聚焦修复与本地确定性验证。",
+  "artifacts": [
+    {
+      "path": "src/server/security.ts"
+    },
+    {
+      "path": "tests/contract/security.test.ts"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-001/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-002/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-003/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-004/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-005/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-006/fix.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/.state/results/NR-DLV-20261113-BCCA3652FB86-0040.json"
+    }
+  ]
+}
