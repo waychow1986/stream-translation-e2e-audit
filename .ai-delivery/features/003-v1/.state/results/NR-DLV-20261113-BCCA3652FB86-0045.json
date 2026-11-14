@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "nodeRunId": "NR-DLV-20261113-BCCA3652FB86-0045",
+  "stage": "bugfix.assessment",
+  "outcome": "passed",
+  "summary": "已完成六项独立评估，均确认是 QA 媒体注入未产生 Speech 音频帧的测试缺口，可交回 QA 计划修复。",
+  "artifacts": [
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-001/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-002/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-003/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-004/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-005/assessment.md"
+    },
+    {
+      "path": ".ai-delivery/features/003-v1/bugfixes/IQA-006/assessment.md"
+    }
+  ]
+}
